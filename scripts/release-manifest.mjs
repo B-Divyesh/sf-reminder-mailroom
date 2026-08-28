@@ -1,0 +1,20 @@
+import { createHash } from "node:crypto";
+import { readdir, readFile, writeFile } from "node:fs/promises";
+import { basename } from "node:path";
+
+const [directory, repository, tag] = process.argv.slice(2);
+if (!directory || !repository || !tag) throw new Error("Usage: node release-manifest.mjs <directory> <owner/repo> <tag>");
+const names = (await readdir(directory)).filter((name) => !["SHA256SUMS", "latest.json"].includes(name));
+const sums = {};
+for (const name of names) sums[name] = createHash("sha256").update(await readFile(`${directory}/${name}`)).digest("hex");
+const url = (name) => `https://github.com/${repository}/releases/download/${tag}/${name.split("/").map(encodeURIComponent).join("/")}`;
+const pick = (predicate) => names.find(predicate);
+const linux = pick((n) => n.endsWith(".AppImage"));
+const windows = pick((n) => n.endsWith(".msi")) ?? pick((n) => n.endsWith(".exe"));
+const macArm = pick((n) => n.endsWith(".dmg") && /(aarch64|arm64)/i.test(n));
+const macX64 = pick((n) => n.endsWith(".dmg") && !/(aarch64|arm64)/i.test(n));
+for (const [platform, name] of Object.entries({ linux, windows, macos_arm64: macArm, macos_x64: macX64 })) if (!name) throw new Error(`Missing release asset for ${platform}: ${names.join(", ")}`);
+const asset = (name, label) => ({ label, url: url(name), sha256: sums[name] });
+const manifest = { version: tag, publishedAt: new Date().toISOString(), platforms: { linux: asset(linux, "Linux AppImage"), windows: asset(windows, "Windows"), macos_arm64: asset(macArm, "macOS Apple silicon"), macos_x64: asset(macX64, "macOS Intel") } };
+await writeFile(`${directory}/SHA256SUMS`, Object.entries(sums).sort().map(([name, hash]) => `${hash}  ${basename(name)}`).join("\n") + "\n");
+await writeFile(`${directory}/latest.json`, JSON.stringify(manifest));

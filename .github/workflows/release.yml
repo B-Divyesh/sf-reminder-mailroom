@@ -1,0 +1,83 @@
+name: Desktop release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release tag"
+        required: true
+        default: "v0.1.0"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux
+            os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - platform: windows
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - platform: macos-x64
+            os: macos-latest
+            target: x86_64-apple-darwin
+          - platform: macos-arm64
+            os: macos-latest
+            target: aarch64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Install Linux desktop libraries
+        if: matrix.platform == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - run: npm ci
+      - name: Build Tauri bundles
+        uses: tauri-apps/tauri-action@v0
+        with:
+          args: --target ${{ matrix.target }}
+      - name: Collect bundles
+        shell: bash
+        run: |
+          mkdir -p release-assets
+          find "src-tauri/target/${{ matrix.target }}/release/bundle" -type f \( -name '*.dmg' -o -name '*.msi' -o -name '*setup.exe' -o -name '*.AppImage' -o -name '*.deb' \) -exec cp {} release-assets/ \;
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.platform }}
+          path: release-assets/*
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+      - name: Create checksums and download manifest
+        run: node scripts/release-manifest.mjs release-assets "${{ github.repository }}" "$RELEASE_TAG"
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: Reminder Mailroom ${{ env.RELEASE_TAG }}
+          generate_release_notes: true
+          files: release-assets/*
