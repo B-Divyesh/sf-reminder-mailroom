@@ -31,6 +31,8 @@ Verified locally on 2026-08-28:
 - `npm run build`: app and site production bundles completed.
 - Static initial payload: 3.5 KB JS, 11.4 KB CSS, 92 KB of Latin font files, 54 KB desktop hero / 15 KB mobile hero; all within the 200/50/120/300 KB budgets.
 - Lighthouse mobile: Performance 99, Accessibility 100, Best Practices 96, SEO 92; LCP 1.7 s, FCP 1.5 s, TBT 0 ms, CLS 0.
+- GitHub Actions run `33158412536`: all four native matrix jobs and the publish job passed. Release: `https://github.com/B-Divyesh/sf-reminder-mailroom/releases/tag/v0.1.0`.
+- Public release verification: `latest.json` contains Linux, Windows, macOS Apple silicon, and macOS Intel URLs. Downloaded `Reminder.Mailroom_0.1.0_amd64.deb` passed its published SHA-256 check (`da6bee48…` in the first run; the final rebuilt asset is represented by the current release checksum).
 
 ## Data locations and behavior
 
