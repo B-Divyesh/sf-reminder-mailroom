@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">Reminder Mailroom</title>
+  <rect width="64" height="64" rx="14" fill="#f3f6f4"/>
+  <path d="M13 18h38v29H13z" fill="#fbfcf8" stroke="#155d70" stroke-width="3"/>
+  <path d="m14 20 18 15 18-15" fill="none" stroke="#155d70" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M23 42h27" stroke="#9d3e35" stroke-width="5" stroke-linecap="round"/>
+</svg>

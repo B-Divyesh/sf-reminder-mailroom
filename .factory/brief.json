@@ -1,0 +1,10 @@
+{
+  "slug": "reminder-mailroom",
+  "title": "Reminder Mailroom",
+  "territory": "utilities",
+  "user": "A solo business that must retain one canonical invoice record in an accounting archive while still sending normal payment reminders.",
+  "smallest_useful_product": "A local SMTP/IMAP companion that labels invoice emails by subject/thread rules, forwards only the first canonical invoice or a deduplicated PDF hash to an archive mailbox, and keeps an audit log.",
+  "artifact_class": "desktop-app",
+  "monetization": "one-time",
+  "constraints": "Use OAuth where required; encrypt local credentials; make forwarding rules visible and reversible; never transmit full mail content to analytics."
+}
