@@ -2,6 +2,8 @@ import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
 test("landing page has one clear heading and working legal routes", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
   await page.goto("/");
   await expect(page).toHaveTitle(/Reminder Mailroom/);
   await expect(page.locator("h1")).toHaveCount(1);
@@ -9,15 +11,19 @@ test("landing page has one clear heading and working legal routes", async ({ pag
   await page.locator('a[href="/privacy/"]').first().click();
   await expect(page).toHaveURL(/\/privacy\/$/);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Privacy");
+  expect(errors).toEqual([]);
 });
 
 test("desktop app shell is keyboard-ready and accessible", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
   await page.goto("http://127.0.0.1:4174");
   await expect(page.locator("h1")).toHaveCount(1);
   await page.keyboard.press("Tab");
   await expect(page.getByRole("link", { name: "Skip to main content" })).toBeFocused();
   const results = await new AxeBuilder({ page }).analyze();
   expect(results.violations.filter((violation) => ["serious", "critical"].includes(violation.impact ?? ""))).toEqual([]);
+  expect(errors).toEqual([]);
 });
 
 test("has no serious or critical axe violations", async ({ page }) => {

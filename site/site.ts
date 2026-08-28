@@ -4,6 +4,7 @@ import { BILLING_BASE, LICENSE_CACHE_KEY, LICENSE_KEY, PRODUCT_SLUG, consumeLice
 type Asset = { url: string; sha256: string; label: string };
 type Manifest = { version: string; platforms: Record<string, Asset> };
 const manifestUrl = "https://github.com/B-Divyesh/sf-reminder-mailroom/releases/latest/download/latest.json";
+const releaseApi = "https://api.github.com/repos/B-Divyesh/sf-reminder-mailroom/releases/latest";
 const fallback = "https://github.com/B-Divyesh/sf-reminder-mailroom/releases/latest";
 
 async function platformKey() {
@@ -27,6 +28,11 @@ async function loadDownloads() {
   const button = document.querySelector<HTMLAnchorElement>("#download-button")!;
   const note = document.querySelector<HTMLElement>("#release-note")!;
   try {
+    // Check the CORS-enabled API first so an unpublished release does not emit a browser console error.
+    const releaseResponse = await fetch(releaseApi, { cache: "no-cache" });
+    if (!releaseResponse.ok) throw new Error("No release yet");
+    const release = await releaseResponse.json() as { assets?: { name: string }[] };
+    if (!release.assets?.some((asset) => asset.name === "latest.json")) throw new Error("Manifest is not published yet");
     const response = await fetch(manifestUrl, { cache: "no-cache" });
     if (!response.ok) throw new Error("No release yet");
     const manifest = await response.json() as Manifest;
@@ -54,5 +60,9 @@ async function verify(token: string) {
 document.querySelectorAll<HTMLButtonElement>("[data-copy]").forEach(button => button.addEventListener("click", async () => { await navigator.clipboard.writeText(button.dataset.copy!); const old = button.textContent; button.textContent = "Copied"; setTimeout(() => button.textContent = old, 1600); }));
 document.querySelector("#verify-license")!.addEventListener("click", () => { const token = document.querySelector<HTMLInputElement>("#site-license")!.value.trim(); if (token) { localStorage.setItem(LICENSE_KEY, token); void verify(token); } });
 const url = new URL(location.href); const incoming = consumeLicenseFromUrl(url, localStorage); if (incoming) { history.replaceState({}, "", url); document.querySelector<HTMLInputElement>("#site-license")!.value = incoming; void verify(incoming); }
-void loadDownloads();
+if (location.hostname === "reminder-mailroom.sociobot.in") {
+  void loadDownloads();
+} else {
+  document.querySelector<HTMLElement>("#release-note")!.textContent = "Preview build · release assets are linked on GitHub";
+}
 if ("serviceWorker" in navigator) window.addEventListener("load", () => void navigator.serviceWorker.register("/sw.js"));
