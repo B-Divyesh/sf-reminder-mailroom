@@ -47,7 +47,7 @@ Each enabled rule searches at most the newest 500 IMAP UIDs matching its explici
 
 ## Needs operator action
 
-1. Confirm the `v0.1.0` workflow completes. Verify one downloaded asset against `SHA256SUMS` and confirm live `latest.json` platform URLs.
+1. The `v0.1.0` workflow completed and published all four platform variants. Preserve the workflow's `contents: write` permission for future releases.
 2. Configure the static deployment to run `npm run build:site` and serve `dist/site` at `https://reminder-mailroom.sociobot.in`.
 3. Register the `reminder-mailroom` production product and return URL in the Sociobot billing engine; no product IDs belong in this repo.
 4. Add signing when certificates are available. Future workflow secrets: `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID`, `WINDOWS_CERT_PFX`, and `WINDOWS_CERT_PASSWORD`.

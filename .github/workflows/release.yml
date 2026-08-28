@@ -54,6 +54,10 @@ jobs:
         run: |
           mkdir -p release-assets
           find "src-tauri/target/${{ matrix.target }}/release/bundle" -type f \( -name '*.dmg' -o -name '*.msi' -o -name '*setup.exe' -o -name '*.AppImage' -o -name '*.deb' \) -exec cp {} release-assets/ \;
+          for file in release-assets/*; do
+            clean="${file// /.}"
+            if [ "$file" != "$clean" ]; then mv "$file" "$clean"; fi
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: release-${{ matrix.platform }}
