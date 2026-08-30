@@ -1,0 +1,176 @@
+{
+  ".factory/brief.json": {
+    "mtime": 1788068756.0221498,
+    "seen": 1788068757.3852165,
+    "ast_hash": "7475ac41380cb77fe6d1f89767ae9017",
+    "semantic_hash": "7475ac41380cb77fe6d1f89767ae9017"
+  },
+  "app/core.ts": {
+    "mtime": 1788068756.0221498,
+    "seen": 1788068757.3852215,
+    "ast_hash": "e60fc87e664b4832970c6f20d7861b8b",
+    "semantic_hash": "e60fc87e664b4832970c6f20d7861b8b"
+  },
+  "app/main.ts": {
+    "mtime": 1788068756.0221498,
+    "seen": 1788068757.3852232,
+    "ast_hash": "9c8b6a2b5857c1fa020fac05c7b7aa1d",
+    "semantic_hash": "9c8b6a2b5857c1fa020fac05c7b7aa1d"
+  },
+  "assets/src/mailroom-hero.png.json": {
+    "mtime": 1788068756.03015,
+    "seen": 1788068757.3852243,
+    "ast_hash": "580da1312ad13689b85b83099c6203be",
+    "semantic_hash": "580da1312ad13689b85b83099c6203be"
+  },
+  "assets/src/mailroom-hero.prompt.json": {
+    "mtime": 1788068756.03015,
+    "seen": 1788068757.3852258,
+    "ast_hash": "8bf4d47d1f64733de8487a285b39555a",
+    "semantic_hash": "8bf4d47d1f64733de8487a285b39555a"
+  },
+  "package.json": {
+    "mtime": 1788068756.03015,
+    "seen": 1788068757.3852265,
+    "ast_hash": "bcba063f67e5b72d5751ceed340c0430",
+    "semantic_hash": "bcba063f67e5b72d5751ceed340c0430"
+  },
+  "playwright.config.ts": {
+    "mtime": 1788068756.03015,
+    "seen": 1788068757.3852277,
+    "ast_hash": "238df4f485c2d288b5055e8afa5e08b2",
+    "semantic_hash": "238df4f485c2d288b5055e8afa5e08b2"
+  },
+  "public/install.ps1": {
+    "mtime": 1788068756.03015,
+    "seen": 1788068757.3852289,
+    "ast_hash": "724f9a8d549e2f3444ecd64de9bb2cf2",
+    "semantic_hash": "724f9a8d549e2f3444ecd64de9bb2cf2"
+  },
+  "public/install.sh": {
+    "mtime": 1788068756.03015,
+    "seen": 1788068757.3852296,
+    "ast_hash": "b9ab697168f701a2b2c5df3cd302bf13",
+    "semantic_hash": "b9ab697168f701a2b2c5df3cd302bf13"
+  },
+  "public/sw.js": {
+    "mtime": 1788068756.03015,
+    "seen": 1788068757.3852305,
+    "ast_hash": "f20cd30eb452bcc5d53f067dd7e9b22d",
+    "semantic_hash": "f20cd30eb452bcc5d53f067dd7e9b22d"
+  },
+  "scripts/release-manifest.mjs": {
+    "mtime": 1788068756.03015,
+    "seen": 1788068757.3852313,
+    "ast_hash": "d7927d8640f9e6038575afc5bc738909",
+    "semantic_hash": "d7927d8640f9e6038575afc5bc738909"
+  },
+  "site/site.ts": {
+    "mtime": 1788068756.03015,
+    "seen": 1788068757.3852327,
+    "ast_hash": "f0543d591d45cc66c6baf0defb29dd6b",
+    "semantic_hash": "f0543d591d45cc66c6baf0defb29dd6b"
+  },
+  "src-tauri/Cargo.toml": {
+    "mtime": 1788068756.03415,
+    "seen": 1788068757.3852334,
+    "ast_hash": "050c4c39695575d293bf0e659159c731",
+    "semantic_hash": "050c4c39695575d293bf0e659159c731"
+  },
+  "src-tauri/build.rs": {
+    "mtime": 1788068756.03415,
+    "seen": 1788068757.3852344,
+    "ast_hash": "2f24a5f10829e00ef4e05134b2319939",
+    "semantic_hash": "2f24a5f10829e00ef4e05134b2319939"
+  },
+  "src-tauri/capabilities/default.json": {
+    "mtime": 1788068756.03415,
+    "seen": 1788068757.3852355,
+    "ast_hash": "2dc1504a0c3069dc2b49bb33e3fa5518",
+    "semantic_hash": "2dc1504a0c3069dc2b49bb33e3fa5518"
+  },
+  "src-tauri/gen/schemas/acl-manifests.json": {
+    "mtime": 1788068756.03415,
+    "seen": 1788068757.3852365,
+    "ast_hash": "0ba7d29863a070859dda4d713ca118dc",
+    "semantic_hash": "0ba7d29863a070859dda4d713ca118dc"
+  },
+  "src-tauri/gen/schemas/capabilities.json": {
+    "mtime": 1788068756.03415,
+    "seen": 1788068757.3852372,
+    "ast_hash": "af19aa329959edcf20b6cf09bf16ec84",
+    "semantic_hash": "af19aa329959edcf20b6cf09bf16ec84"
+  },
+  "src-tauri/gen/schemas/desktop-schema.json": {
+    "mtime": 1788068756.03415,
+    "seen": 1788068757.3852382,
+    "ast_hash": "6c3f18b65fe3b826c905b040074ee10d",
+    "semantic_hash": "6c3f18b65fe3b826c905b040074ee10d"
+  },
+  "src-tauri/gen/schemas/linux-schema.json": {
+    "mtime": 1788068756.03415,
+    "seen": 1788068757.38524,
+    "ast_hash": "6c3f18b65fe3b826c905b040074ee10d",
+    "semantic_hash": "6c3f18b65fe3b826c905b040074ee10d"
+  },
+  "src-tauri/src/desktop.rs": {
+    "mtime": 1788068756.03415,
+    "seen": 1788068757.3852408,
+    "ast_hash": "391d1e89483a077d0759a8ea277da6d7",
+    "semantic_hash": "391d1e89483a077d0759a8ea277da6d7"
+  },
+  "src-tauri/src/lib.rs": {
+    "mtime": 1788068756.03415,
+    "seen": 1788068757.3852417,
+    "ast_hash": "f5271113156c86c888c007b1aa68be69",
+    "semantic_hash": "f5271113156c86c888c007b1aa68be69"
+  },
+  "src-tauri/src/main.rs": {
+    "mtime": 1788068756.03415,
+    "seen": 1788068757.385243,
+    "ast_hash": "90b73346b8019115f0159db768ff1ffd",
+    "semantic_hash": "90b73346b8019115f0159db768ff1ffd"
+  },
+  "src-tauri/tauri.conf.json": {
+    "mtime": 1788068756.03415,
+    "seen": 1788068757.3852446,
+    "ast_hash": "c5a165323369e4c9661e1d985e09e550",
+    "semantic_hash": "c5a165323369e4c9661e1d985e09e550"
+  },
+  "tests/core.test.ts": {
+    "mtime": 1788068756.03415,
+    "seen": 1788068757.3852453,
+    "ast_hash": "0bad09351746f394eb792397851b0db8",
+    "semantic_hash": "0bad09351746f394eb792397851b0db8"
+  },
+  "tests/e2e/site.spec.ts": {
+    "mtime": 1788068756.03415,
+    "seen": 1788068757.3852465,
+    "ast_hash": "eee5140da7c456ade58233ab694b58cf",
+    "semantic_hash": "eee5140da7c456ade58233ab694b58cf"
+  },
+  "tsconfig.json": {
+    "mtime": 1788068756.03415,
+    "seen": 1788068757.3852475,
+    "ast_hash": "26c7b59cf4b6c2b0c5b72915d6138fff",
+    "semantic_hash": "26c7b59cf4b6c2b0c5b72915d6138fff"
+  },
+  "vite.app.config.ts": {
+    "mtime": 1788068756.03415,
+    "seen": 1788068757.3852484,
+    "ast_hash": "243d74d5d0640ef6d4efd4d060b1cf9c",
+    "semantic_hash": "243d74d5d0640ef6d4efd4d060b1cf9c"
+  },
+  "vite.site.config.ts": {
+    "mtime": 1788068756.03415,
+    "seen": 1788068757.3852494,
+    "ast_hash": "ba14387d33368f40d391c4a9c728d19b",
+    "semantic_hash": "ba14387d33368f40d391c4a9c728d19b"
+  },
+  "vitest.config.ts": {
+    "mtime": 1788068756.03415,
+    "seen": 1788068757.38525,
+    "ast_hash": "943e5ebf432e8e6ea1c7ae87d1106c51",
+    "semantic_hash": "943e5ebf432e8e6ea1c7ae87d1106c51"
+  }
+}
