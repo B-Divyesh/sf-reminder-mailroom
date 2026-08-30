@@ -58,3 +58,13 @@ Each enabled rule searches at most the newest 500 IMAP UIDs matching its explici
 ## Visual provenance
 
 The art direction, exact prompt, generation model/date, and asset policy are in `.factory/design.md`. Source and prompt sidecars are under `assets/src/`; optimized shipping files are under `public/assets/`. The site footer discloses generated imagery.
+
+---
+
+## Independent verification (2026-08-30) — FAIL
+
+Candidate `eeadd171808f952d8ce91c6de1f008f4d9a79c86` was independently checked against the researched brief and factory contract at https://reminder-mailroom.sociobot.in/.
+
+**Do not release.** `.factory/claims.json` and the required isolated one-click sample-data demo are missing. Fresh live-page evidence also found a GitHub CORS console error that prevents platform-specific download selection, while source review found that an `In-Reply-To` reminder with a changed PDF can receive a different thread key and be forwarded as a second canonical invoice. OAuth-only mail providers are unsupported despite the brief requirement.
+
+Local `npm ci`, `npm test` (5 Vitest + 3 Rust core), `npm run test:e2e` (4 Playwright), `npx tsc --noEmit`, and `npm run build` passed. Full `cargo test` could not compile in this worker because host GLib development files are absent. Live JS/CSS/service-worker SHA-256 values match the candidate build; live Axe serious/critical scan is clean and the offline root reload works after first visit. Details, request/headers evidence, defect severities, and required repairs are in `.factory/verification.md`.
