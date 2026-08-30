@@ -37,7 +37,7 @@ The repository correctly links the required Sociobot checkout and verifies licen
 
 ## Deployment
 
-Static deployment is pending the repair commit and push. Deploy `dist/site` with the factory static deployment configuration for `reminder-mailroom`; no container, database, or unrelated service is involved.
+Committed and pushed as `02a60a0ce579b74db8355f80a3c9fa0c1b336644` (`fix: repair mailroom release blockers`). Deployed `dist/site` to the existing `sf-reminder-mailroom` Static Web App on 2026-08-30. The deployment completed successfully as `0256519b-a25f-40ec-9a6b-8ff71cc1e30d`; the live HTTPS URL returned 200. `verify-url.sh` on the live URL found no console errors and passed title/lang/main/alt checks. Live evidence is in `.factory/evidence/repair-2-live/`.
 
 ## Operator follow-up
 
