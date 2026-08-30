@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Try Reminder Mailroom with an isolated sample invoice thread." />
+    <meta name="theme-color" content="#f3f6f4" />
+    <link rel="canonical" href="https://reminder-mailroom.sociobot.in/demo/" />
+    <link rel="icon" href="/app-mark.svg" />
+    <title>Demo — Reminder Mailroom</title>
+  </head>
+  <body class="demo-page">
+    <a class="skip-link" href="#main">Skip to main content</a>
+    <aside class="demo-banner" aria-label="Demo status">
+      <strong>Demo — sample data, nothing is saved</strong>
+      <span><button id="reset-demo" type="button">Reset demo</button><a id="start-real" href="/#download">Start for real</a></span>
+    </aside>
+    <header class="site-header demo-header">
+      <a class="site-brand" href="/" aria-label="Reminder Mailroom home"><img src="/app-mark.svg" alt="" width="42" height="42"><span>Reminder Mailroom</span></a>
+      <nav aria-label="Demo navigation"><a href="/">Product page</a><a href="/privacy/">Privacy</a></nav>
+    </header>
+    <main id="main" tabindex="-1" class="demo-main">
+      <div class="demo-title"><div><p class="eyebrow">Sample workspace</p><h1>See one invoice archived from three messages</h1><p>A realistic invoice thread stays inside this browser-only demo namespace.</p></div><button class="button" id="run-demo" type="button">Run sample sort</button></div>
+      <p id="demo-status" class="demo-status" role="status" aria-live="polite">Three messages are ready. Preview their subjects and PDF fingerprints below.</p>
+      <section aria-labelledby="inbox-heading">
+        <div class="demo-section-heading"><div><p class="eyebrow">Client invoices rule</p><h2 id="inbox-heading">Sample inbox</h2></div><p>Subject contains “invoice” · sender contains “northstar.example”</p></div>
+        <ol class="demo-messages" id="demo-messages"></ol>
+      </section>
+      <section aria-labelledby="result-heading" class="demo-result">
+        <div class="demo-section-heading"><div><p class="eyebrow">Local decision log</p><h2 id="result-heading">Sorting result</h2></div><button class="button secondary" id="export-demo" type="button" disabled>Export audit CSV</button></div>
+        <div class="demo-stats"><p><strong id="demo-archived">0</strong><span>canonical invoice archived</span></p><p><strong id="demo-skipped">0</strong><span>duplicates kept out</span></p><p><strong id="demo-forwarded">0</strong><span>messages forwarded</span></p></div>
+        <ol class="demo-audit" id="demo-audit"><li class="demo-empty">Run the sample sort to record each decision.</li></ol>
+      </section>
+      <section class="demo-boundary" aria-labelledby="boundary-heading"><h2 id="boundary-heading">What this sample does</h2><ul><li>Uses the separate <code>demo:reminder-mailroom</code> browser key.</li><li>Makes no mailbox, analytics, billing, or release requests.</li><li>Leaves every sample reminder in place while archiving one PDF.</li></ul></section>
+    </main>
+    <footer><div class="site-brand"><img src="/app-mark.svg" alt="" width="36" height="36"><span>Reminder Mailroom</span></div><p>Archive one invoice from each payment reminder thread.</p><nav aria-label="Legal"><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a></nav><p class="disclosure">Built by Param Factory · v0.2.0</p></footer>
+    <script type="module" src="/demo.ts"></script>
+  </body>
+</html>

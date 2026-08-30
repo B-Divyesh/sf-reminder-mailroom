@@ -10,11 +10,13 @@ for (const name of names) sums[name] = createHash("sha256").update(await readFil
 const url = (name) => `https://github.com/${repository}/releases/download/${tag}/${name.split("/").map(encodeURIComponent).join("/")}`;
 const pick = (predicate) => names.find(predicate);
 const linux = pick((n) => n.endsWith(".AppImage"));
+const linuxDeb = pick((n) => n.endsWith(".deb"));
+const linuxRpm = pick((n) => n.endsWith(".rpm"));
 const windows = pick((n) => n.endsWith(".msi")) ?? pick((n) => n.endsWith(".exe"));
 const macArm = pick((n) => n.endsWith(".dmg") && /(aarch64|arm64)/i.test(n));
 const macX64 = pick((n) => n.endsWith(".dmg") && !/(aarch64|arm64)/i.test(n));
-for (const [platform, name] of Object.entries({ linux, windows, macos_arm64: macArm, macos_x64: macX64 })) if (!name) throw new Error(`Missing release asset for ${platform}: ${names.join(", ")}`);
+for (const [platform, name] of Object.entries({ linux, linux_deb: linuxDeb, linux_rpm: linuxRpm, windows, macos_arm64: macArm, macos_x64: macX64 })) if (!name) throw new Error(`Missing release asset for ${platform}: ${names.join(", ")}`);
 const asset = (name, label) => ({ label, url: url(name), sha256: sums[name] });
-const manifest = { version: tag, publishedAt: new Date().toISOString(), platforms: { linux: asset(linux, "Linux AppImage"), windows: asset(windows, "Windows"), macos_arm64: asset(macArm, "macOS Apple silicon"), macos_x64: asset(macX64, "macOS Intel") } };
+const manifest = { version: tag, publishedAt: new Date().toISOString(), platforms: { linux: asset(linux, "Linux AppImage"), linux_deb: asset(linuxDeb, "Linux DEB"), linux_rpm: asset(linuxRpm, "Linux RPM"), windows: asset(windows, "Windows"), macos_arm64: asset(macArm, "macOS Apple silicon"), macos_x64: asset(macX64, "macOS Intel") } };
 await writeFile(`${directory}/SHA256SUMS`, Object.entries(sums).sort().map(([name, hash]) => `${hash}  ${basename(name)}`).join("\n") + "\n");
 await writeFile(`${directory}/latest.json`, JSON.stringify(manifest));

@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { BILLING_BASE, LICENSE_CACHE_KEY, LICENSE_KEY, PRODUCT_SLUG, cachedLicense, consumeLicenseFromUrl } from "./core";
 
 type Settings = {
+  authMode: string; oauthProvider: string; oauthClientId: string;
   imapHost: string; imapPort: number; imapSecurity: string; imapUsername: string;
   smtpHost: string; smtpPort: number; smtpSecurity: string; smtpUsername: string;
   archiveAddress: string; scanIntervalMinutes: number;
@@ -12,7 +13,7 @@ type AuditEntry = { id: number; occurredAt: string; subject: string; threadKey: 
 type AppSnapshot = { settings: Settings | null; rules: Rule[]; audit: AuditEntry[]; archivedCount: number; duplicateCount: number };
 
 const isTauri = "__TAURI_INTERNALS__" in window;
-const defaultSettings: Settings = { imapHost: "", imapPort: 993, imapSecurity: "tls", imapUsername: "", smtpHost: "", smtpPort: 587, smtpSecurity: "starttls", smtpUsername: "", archiveAddress: "", scanIntervalMinutes: 60 };
+const defaultSettings: Settings = { authMode: "password", oauthProvider: "google", oauthClientId: "", imapHost: "", imapPort: 993, imapSecurity: "tls", imapUsername: "", smtpHost: "", smtpPort: 587, smtpSecurity: "starttls", smtpUsername: "", archiveAddress: "", scanIntervalMinutes: 60 };
 let snapshot: AppSnapshot = { settings: null, rules: [], audit: [], archivedCount: 0, duplicateCount: 0 };
 let paid = false;
 let activeView = "setup";
@@ -59,8 +60,14 @@ function navButton(id: string, label: string, icon: string) {
 function setupView() {
   return `<section class="view active" data-section="setup" aria-labelledby="setup-heading">
     <h2 id="setup-heading">Connect your mailroom</h2>
-    <p class="section-intro">Use an app password where your provider supports it. Gmail and Microsoft accounts that forbid app passwords require provider OAuth, which is noted before saving.</p>
+    <p class="section-intro">Use an app password or connect Google and Microsoft with OAuth. OAuth tokens stay in your operating system keychain.</p>
     <form id="settings-form">
+      <fieldset><legend>Sign-in method</legend><div class="form-grid">
+        ${selectField("auth-mode", "Authentication", [["password", "App password"], ["oauth", "OAuth 2.0"]])}
+        <div class="field oauth-field" hidden>${selectField("oauth-provider", "OAuth provider", [["google", "Google"], ["microsoft", "Microsoft"]])}</div>
+        <div class="field oauth-field span-2" hidden>${field("oauth-client-id", "Desktop OAuth client ID", "Client ID from your provider console", "text", false, "Use a desktop client with a loopback redirect. Mailroom uses PKCE and never asks for a client secret.")}</div>
+        <div class="oauth-field span-2" hidden><button class="button secondary" type="button" id="authorize-oauth">Connect with OAuth</button></div>
+      </div></fieldset>
       <fieldset><legend>Invoice mailbox (IMAP)</legend><div class="form-grid">
         ${field("imap-host", "Server", "imap.example.com", "text", true)}
         ${field("imap-port", "Port", "993", "number", true)}
@@ -80,7 +87,7 @@ function setupView() {
       <div class="actions"><button class="button" type="submit">Save mailboxes</button><button class="button secondary" type="button" id="test-connection">Test both connections</button></div>
       <p class="status-message" id="settings-status" role="status"></p>
     </form>
-    <div class="privacy-strip">${icons.license}<div><strong>Your mail does not pass through us.</strong><p>Reminder Mailroom reads only messages matched by your explicit rules. Credentials use the OS keychain; settings, hashes, and audit history stay on this device.</p></div></div>
+    <div class="privacy-strip">${icons.license}<div><strong>Your mail does not pass through us.</strong><p>Reminder Mailroom reads only messages matched by your explicit rules. Passwords and OAuth tokens use the OS keychain. Settings, hashes, and audit history stay on this device.</p></div></div>
   </section>`;
 }
 
@@ -119,11 +126,28 @@ async function loadState() {
 
 function fillSettings() {
   const s = snapshot.settings ?? defaultSettings;
-  const values: Record<string, string | number> = { "imap-host": s.imapHost, "imap-port": s.imapPort, "imap-user": s.imapUsername, "imap-security": s.imapSecurity, "smtp-host": s.smtpHost, "smtp-port": s.smtpPort, "smtp-user": s.smtpUsername, "smtp-security": s.smtpSecurity, "archive-address": s.archiveAddress, "scan-interval": s.scanIntervalMinutes };
+  const values: Record<string, string | number> = { "auth-mode": s.authMode, "oauth-provider": s.oauthProvider, "oauth-client-id": s.oauthClientId, "imap-host": s.imapHost, "imap-port": s.imapPort, "imap-user": s.imapUsername, "imap-security": s.imapSecurity, "smtp-host": s.smtpHost, "smtp-port": s.smtpPort, "smtp-user": s.smtpUsername, "smtp-security": s.smtpSecurity, "archive-address": s.archiveAddress, "scan-interval": s.scanIntervalMinutes };
   for (const [id, value] of Object.entries(values)) { const node = $<HTMLInputElement | HTMLSelectElement>(`#${id}`); node.value = String(value); }
+  updateAuthFields();
 }
 
-function readSettings(): Settings { return { imapHost: $<HTMLInputElement>("#imap-host").value.trim(), imapPort: Number($<HTMLInputElement>("#imap-port").value), imapSecurity: $<HTMLSelectElement>("#imap-security").value, imapUsername: $<HTMLInputElement>("#imap-user").value.trim(), smtpHost: $<HTMLInputElement>("#smtp-host").value.trim(), smtpPort: Number($<HTMLInputElement>("#smtp-port").value), smtpSecurity: $<HTMLSelectElement>("#smtp-security").value, smtpUsername: $<HTMLInputElement>("#smtp-user").value.trim(), archiveAddress: $<HTMLInputElement>("#archive-address").value.trim(), scanIntervalMinutes: Number($<HTMLInputElement>("#scan-interval").value) }; }
+function readSettings(): Settings { return { authMode: $<HTMLSelectElement>("#auth-mode").value, oauthProvider: $<HTMLSelectElement>("#oauth-provider").value, oauthClientId: $<HTMLInputElement>("#oauth-client-id").value.trim(), imapHost: $<HTMLInputElement>("#imap-host").value.trim(), imapPort: Number($<HTMLInputElement>("#imap-port").value), imapSecurity: $<HTMLSelectElement>("#imap-security").value, imapUsername: $<HTMLInputElement>("#imap-user").value.trim(), smtpHost: $<HTMLInputElement>("#smtp-host").value.trim(), smtpPort: Number($<HTMLInputElement>("#smtp-port").value), smtpSecurity: $<HTMLSelectElement>("#smtp-security").value, smtpUsername: $<HTMLInputElement>("#smtp-user").value.trim(), archiveAddress: $<HTMLInputElement>("#archive-address").value.trim(), scanIntervalMinutes: Number($<HTMLInputElement>("#scan-interval").value) }; }
+
+function updateAuthFields() {
+  const oauth = $<HTMLSelectElement>("#auth-mode").value === "oauth";
+  document.querySelectorAll<HTMLElement>(".oauth-field").forEach((node) => { node.hidden = !oauth; });
+  document.querySelectorAll<HTMLElement>("#imap-password, #smtp-password").forEach((node) => { node.closest<HTMLElement>(".field")!.hidden = oauth; });
+}
+
+function applyProviderDefaults() {
+  if ($<HTMLSelectElement>("#auth-mode").value !== "oauth") return;
+  const microsoft = $<HTMLSelectElement>("#oauth-provider").value === "microsoft";
+  $<HTMLInputElement>("#imap-host").value = microsoft ? "outlook.office365.com" : "imap.gmail.com";
+  $<HTMLInputElement>("#imap-port").value = "993";
+  $<HTMLInputElement>("#smtp-host").value = microsoft ? "smtp.office365.com" : "smtp.gmail.com";
+  $<HTMLInputElement>("#smtp-port").value = "587";
+  $<HTMLSelectElement>("#smtp-security").value = "starttls";
+}
 
 function renderRules() {
   const host = $("#rule-list");
@@ -228,6 +252,19 @@ function toast(message: string, error = false) { $("#toast-root").innerHTML = `<
 function updateOnline() { $("#offline").classList.toggle("visible", !navigator.onLine); }
 
 document.querySelectorAll<HTMLElement>("[data-view]").forEach(button => button.addEventListener("click", () => switchView(button.dataset.view!)));
+$("#auth-mode").addEventListener("change", () => { updateAuthFields(); applyProviderDefaults(); });
+$("#oauth-provider").addEventListener("change", applyProviderDefaults);
+$("#authorize-oauth").addEventListener("click", async () => {
+  const button = $<HTMLButtonElement>("#authorize-oauth");
+  button.disabled = true;
+  setStatus("#settings-status", "Opening your provider. Finish sign-in in the browser within three minutes.");
+  try {
+    const message = await call<string>("authorize_oauth", { settings: readSettings() });
+    snapshot.settings = readSettings();
+    setStatus("#settings-status", message, false, true);
+  } catch (error) { setStatus("#settings-status", String(error), true); }
+  finally { button.disabled = false; }
+});
 $("#settings-form").addEventListener("submit", async (event) => { event.preventDefault(); const payload = settingsPayload(); try { await call("save_settings", payload); snapshot.settings = payload.settings; $<HTMLInputElement>("#imap-password").value = ""; $<HTMLInputElement>("#smtp-password").value = ""; setStatus("#settings-status", "Mailboxes saved. Test the connection before sorting.", false, true); toast("Mailbox settings saved."); configureSchedule(); } catch (error) { setStatus("#settings-status", String(error), true); } });
 $("#test-connection").addEventListener("click", async () => { const button = $<HTMLButtonElement>("#test-connection"); button.disabled = true; setStatus("#settings-status", "Checking IMAP and SMTP securely…"); try { await call("test_connections", settingsPayload()); $("#connection-label").textContent = "Both connected"; $("#connection-dot").classList.add("connected"); setStatus("#settings-status", "Both servers accepted the connection. No message was sent.", false, true); } catch (error) { $("#connection-label").textContent = "Check failed"; $("#connection-dot").classList.remove("connected"); setStatus("#settings-status", String(error), true); } finally { button.disabled = false; } });
 $("#add-rule").addEventListener("click", () => openRuleDialog());

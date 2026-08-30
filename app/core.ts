@@ -19,6 +19,11 @@ export function normalizeSubject(subject: string): string {
     .trim();
 }
 
+export function canonicalThreadKey(subject: string): string {
+  const normalized = normalizeSubject(subject);
+  return normalized ? `subject:${normalized}` : `subject:unknown`;
+}
+
 export function subjectMatches(subject: string, needle: string): boolean {
   const terms = needle.split(",").map((term) => term.trim().toLocaleLowerCase()).filter(Boolean);
   const haystack = subject.toLocaleLowerCase();

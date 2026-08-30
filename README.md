@@ -1,30 +1,33 @@
 # Reminder Mailroom
 
-Reminder Mailroom is a local desktop companion for solo businesses that need one canonical invoice in an accounting archive without suppressing ordinary payment reminders.
-
-It connects directly to an invoice mailbox over IMAP, applies only the subject/sender rules you create, identifies the first PDF in each invoice thread, forwards that PDF to an accounting archive over SMTP, and records every archive or skipped duplicate in a local SQLite audit trail. It does not generate invoices, move source mail, or provide bookkeeping.
+Reminder Mailroom is a local desktop companion for solo businesses that send payment reminders. It keeps one canonical invoice in an accounting archive while later reminders continue normally.
 
 Live site: <https://reminder-mailroom.sociobot.in>
 
-## Who it is for
+One-click sample: <https://reminder-mailroom.sociobot.in/demo/>
 
-Use Mailroom when an invoicing tool BCCs every outbound message to accounting and reminders create duplicate records. It is deliberately narrow: the sending workflow stays unchanged, while the archive receives one searchable canonical PDF.
+## What it does
+
+The app searches the IMAP mailbox and subjects you choose. It reads matching PDFs without marking source messages as read. The first PDF in an invoice thread is sent to your accounting mailbox over SMTP. Later copies, including regenerated PDFs in the same thread, are skipped and recorded in a local SQLite audit.
+
+The bundled demo contains three messages for invoice #1042. One is the original, one repeats its PDF, and one has a changed PDF. Running the sample produces one archive decision and two duplicate decisions. The demo uses only `demo:reminder-mailroom` browser storage and works offline after its first visit.
+
+## Sign in to mail
+
+Choose either method in **Mailboxes**:
+
+- App password: supported by any provider that permits TLS IMAP and SMTP app passwords.
+- OAuth 2.0: supported for Google and Microsoft with Authorization Code + PKCE, a loopback callback, XOAUTH2 for IMAP and SMTP, and automatic refresh.
+
+OAuth needs a desktop client ID from your own provider account. For Google, create a Desktop OAuth client and enable Gmail access. For Microsoft, register a public desktop client and allow loopback redirects. Paste the client ID, choose the provider, then select **Connect with OAuth**. Client IDs and non-secret settings use local JSON. Passwords, access tokens, and refresh tokens use the operating system credential manager.
 
 ## Privacy and safety
 
-- Mail content travels only between the computer and the configured IMAP/SMTP servers.
-- The app searches only explicit subject terms and optional senders.
-- IMAP reads use `BODY.PEEK[]`, so source messages are not marked read, moved, or deleted.
-- Passwords are stored in the operating system credential manager; rules and non-secret settings are plain local JSON.
-- PDF SHA-256 hashes, normalized thread keys, and audit events are stored in local SQLite.
-- Preview mode never forwards mail. The full audit CSV export is free.
-- There is no telemetry, behavioral analytics, or third-party runtime code.
-
-Use a provider app password with TLS IMAP and TLS/STARTTLS SMTP. Providers that allow only OAuth are not yet supported because a distributable provider client registration is required.
+Mail content travels directly between the desktop app and the configured mail servers. The website has no analytics, ads, or third-party fonts. It requests only public release metadata from `api.github.com`; license actions use `api.sociobot.in`. Every claim and its deterministic verification command is listed in [.factory/claims.json](.factory/claims.json).
 
 ## Install
 
-The [download page](https://reminder-mailroom.sociobot.in/#download) detects macOS, Windows, or Linux and reads the checksum manifest from the latest GitHub Release.
+The [download page](https://reminder-mailroom.sociobot.in/#download) selects a published macOS, Windows, or Linux asset from the CORS-enabled GitHub API.
 
 ```sh
 curl -fsSL https://reminder-mailroom.sociobot.in/install.sh | sh
@@ -34,50 +37,35 @@ curl -fsSL https://reminder-mailroom.sociobot.in/install.sh | sh
 irm https://reminder-mailroom.sociobot.in/install.ps1 | iex
 ```
 
-The v0.1 desktop packages are open-source but unsigned. On macOS, Control-click the app and choose **Open** the first time. Windows may show a SmartScreen publisher warning. The install scripts verify SHA-256 before opening or placing an artifact.
+Packages are open source and currently unsigned. macOS and Windows may show a first-open warning. Each GitHub Release includes `SHA256SUMS` and `latest.json`. The install scripts verify SHA-256 before installing.
 
-## Develop
+## Develop and verify
 
-Prerequisites: Node 22+, Rust stable, and the Tauri 2 system dependencies for your OS.
+Use Node 22+, Rust stable, and the Tauri 2 system libraries for your OS.
 
 ```sh
 npm ci
-npm run dev          # app UI in a browser
-npm run dev:site     # landing site
-npm run tauri dev    # native desktop app
+npm test
+npm run test:e2e
+npx tsc --noEmit
+npm run build
 ```
 
-On Ubuntu/Debian, the desktop build uses:
+`npm run build` is the clean production build and creates `dist/app` plus `dist/site`. Static deployment serves `dist/site`. Native packages are built only by [.github/workflows/release.yml](.github/workflows/release.yml) on the four GitHub runner targets.
 
-```sh
-sudo apt-get install libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-```
-
-## Test and build
-
-```sh
-npm test             # TypeScript tests + platform-independent Rust core tests
-npm run test:e2e     # Chromium, axe, keyboard, and 390 px checks
-cargo test --manifest-path src-tauri/Cargo.toml  # full native tests when Tauri system libs exist
-npm run build        # dist/app and dist/site
-npm run build:site   # exact static deploy output: dist/site
-npm run tauri build  # native packages for the current platform
-```
-
-The tag-triggered workflow in `.github/workflows/release.yml` builds `.dmg` for Apple silicon and Intel, `.msi`/`.exe` for Windows, and `.AppImage`/`.deb` for Linux. It publishes the installers plus `SHA256SUMS` and `latest.json` to a GitHub Release. Platform binaries are never produced by the factory worker.
+On Ubuntu/Debian, install `libwebkit2gtk-4.1-dev`, `libappindicator3-dev`, `librsvg2-dev`, and `patchelf` before a full desktop build.
 
 ## Purchase
 
-The free edition supports one rule, manual sorting, and complete audit export. Mailroom Plus is a $29 one-time purchase for unlimited rules and scheduled checks while the app is open. Checkout and license verification use only the Sociobot billing API; no payment provider is embedded in this repository.
+The free edition includes one rule, manual processing, and audit CSV export. Mailroom Plus costs US $29 once. It adds unlimited rules, checks while the app is open, and v1 updates. Checkout and license verification use the Sociobot billing API. Sociobot/Dodo is the merchant of record.
 
 ## Repository map
 
-- `app/` — Tauri webview UI and product logic
-- `src-tauri/` — Rust IMAP, SMTP, keychain, hashing, SQLite, and packaging core
-- `site/` — static download, privacy, and terms pages
+- `app/` — Tauri webview UI
+- `src-tauri/` — Rust mail, OAuth, keychain, hashing, SQLite, and packaging core
+- `site/` — static product, demo, privacy, terms, and 404 pages
 - `public/install.*` — checksum-verifying installers
-- `.factory/design.md` — visual system and generated-art provenance
-- `.factory/handoff.md` — verification and operator handoff
+- `.factory/` — brief, visual thesis, claims, demo contract, copy audit, and handoff
 
 ## License
 

@@ -1,0 +1,58 @@
+[
+  {
+    "id": "release-platform-download",
+    "claim": "The download page selects a published installer for the visitor's platform from GitHub API metadata.",
+    "where": "landing download actions and README",
+    "test": "npm run test:e2e -- --grep @claim:release-platform-download",
+    "sandbox": "fresh browser context; mocked deterministic api.github.com release fixture; assert the selected asset URL and absence of release-download metadata fetches"
+  },
+  {
+    "id": "changed-pdf-thread",
+    "claim": "Only the first invoice PDF in a reminder thread is archived, even when a later reminder has a changed PDF.",
+    "where": "landing page, demo, desktop activity, README",
+    "test": "npm run test:e2e -- --grep @claim:changed-pdf-thread",
+    "sandbox": "fresh browser context at /demo/; bundled three-message thread; assert one archive, two skips, and changed-PDF thread reason"
+  },
+  {
+    "id": "demo-isolation",
+    "claim": "The sample demo is isolated from real data and makes no external requests.",
+    "where": "landing action, demo banner, privacy page",
+    "test": "npm run test:e2e -- --grep @claim:demo-isolation",
+    "sandbox": "fresh browser context at /demo/; run sample; record all requests and localStorage keys"
+  },
+  {
+    "id": "audit-csv-export",
+    "claim": "The audit can be exported as CSV.",
+    "where": "demo, desktop activity, README",
+    "test": "npm run test:e2e -- --grep @claim:audit-csv-export",
+    "sandbox": "fresh browser context at /demo/; run bundled thread; inspect downloaded CSV header and three decision rows"
+  },
+  {
+    "id": "local-interface-privacy",
+    "claim": "Viewing local rules and activity sends no data to a product server.",
+    "where": "landing privacy facts, desktop navigation, privacy page, README",
+    "test": "npm run test:e2e -- --grep @claim:local-interface-privacy",
+    "sandbox": "fresh browser context against desktop UI; record all requests while opening rules and activity; assert same-origin only"
+  },
+  {
+    "id": "offline-reload",
+    "claim": "The product demo works offline after the first visit.",
+    "where": "README and demo documentation",
+    "test": "npm run test:e2e -- --grep @claim:offline-reload",
+    "sandbox": "dedicated fresh browser context; install service worker online; set context offline; reload /demo/"
+  },
+  {
+    "id": "oauth-provider-setup",
+    "claim": "The desktop app supports OAuth setup for Google and Microsoft mailboxes.",
+    "where": "desktop mailbox setup and README",
+    "test": "npm run test:e2e -- --grep @claim:oauth-provider-setup",
+    "sandbox": "fresh browser context against desktop UI; select OAuth and assert both providers, client ID, and connect action"
+  },
+  {
+    "id": "paid-tier-copy",
+    "claim": "Mailroom Plus costs $29 once and adds unlimited rules and checks while the app is open.",
+    "where": "landing pricing, desktop Plus view, terms, README",
+    "test": "npm run test:e2e -- --grep @claim:paid-tier-copy",
+    "sandbox": "fresh browser context; assert exact price, included feature, and Sociobot checkout URL"
+  }
+]

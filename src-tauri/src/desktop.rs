@@ -2,7 +2,7 @@ use chrono::Utc;
 use imap::Session;
 use lettre::{
     message::{header::ContentType, Attachment, Mailbox, MultiPart, SinglePart},
-    transport::smtp::authentication::Credentials,
+    transport::smtp::authentication::{Credentials, Mechanism},
     Message, SmtpTransport, Transport,
 };
 use mailparse::{parse_mail, MailHeaderMap, ParsedMail};
@@ -14,8 +14,11 @@ use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeSet,
     fs,
-    net::TcpStream,
+    io::{Read, Write},
+    net::{TcpListener, TcpStream},
     path::{Path, PathBuf},
+    thread,
+    time::{Duration, Instant},
 };
 use tauri::{AppHandle, Manager};
 
@@ -25,6 +28,12 @@ const SEARCH_LIMIT: usize = 500;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Settings {
+    #[serde(default = "default_auth_mode")]
+    auth_mode: String,
+    #[serde(default)]
+    oauth_provider: String,
+    #[serde(default)]
+    oauth_client_id: String,
     imap_host: String,
     imap_port: u16,
     imap_security: String,
@@ -35,6 +44,35 @@ pub struct Settings {
     smtp_username: String,
     archive_address: String,
     scan_interval_minutes: u32,
+}
+
+fn default_auth_mode() -> String { "password".into() }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct OAuthToken { access_token: String, refresh_token: String, expires_at: i64 }
+
+#[derive(Debug, Deserialize)]
+struct OAuthResponse {
+    access_token: String,
+    #[serde(default)]
+    refresh_token: String,
+    #[serde(default = "default_expires_in")]
+    expires_in: i64,
+}
+
+fn default_expires_in() -> i64 { 3600 }
+
+struct XOAuth2 { username: String, access_token: String }
+
+impl imap::Authenticator for XOAuth2 {
+    type Response = Vec<u8>;
+    fn process(&self, _challenge: &[u8]) -> Self::Response {
+        xoauth2_payload(&self.username, &self.access_token).into_bytes()
+    }
+}
+
+fn xoauth2_payload(username: &str, access_token: &str) -> String {
+    format!("user={username}\x01auth=Bearer {access_token}\x01\x01")
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -89,6 +127,7 @@ struct Candidate {
     subject: String,
     sender: String,
     thread_key: String,
+    thread_aliases: Vec<String>,
     pdf: PdfAttachment,
 }
 
@@ -142,6 +181,11 @@ fn open_db(app: &AppHandle) -> Result<Connection, String> {
                thread_key TEXT PRIMARY KEY,
                pdf_hash TEXT NOT NULL UNIQUE,
                archived_at TEXT NOT NULL
+             );
+             CREATE TABLE IF NOT EXISTS canonical_aliases (
+               alias TEXT PRIMARY KEY,
+               thread_key TEXT NOT NULL,
+               FOREIGN KEY(thread_key) REFERENCES canonicals(thread_key)
              );",
         )
         .map_err(|error| format!("Could not prepare the audit database: {error}"))?;
@@ -233,8 +277,7 @@ async fn test_connections(
 ) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
         validate_settings(&settings)?;
-        let imap_secret = supplied_or_saved(imap_password, &format!("imap:{}", settings.imap_username))?;
-        let smtp_secret = supplied_or_saved(smtp_password, &format!("smtp:{}", settings.smtp_username))?;
+        let (imap_secret, smtp_secret) = connection_secrets(&settings, imap_password, smtp_password)?;
         let mut session = connect_imap(&settings, &imap_secret)?;
         session.logout().map_err(|error| format!("IMAP connected but logout failed: {error}"))?;
         let transport = smtp_transport(&settings, &smtp_secret)?;
@@ -246,6 +289,18 @@ async fn test_connections(
     })
     .await
     .map_err(|error| format!("Connection task failed: {error}"))?
+}
+
+#[tauri::command]
+async fn authorize_oauth(app: AppHandle, settings: Settings) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        validate_settings(&settings)?;
+        if settings.auth_mode != "oauth" { return Err("Choose OAuth before connecting a provider.".into()); }
+        let token = run_oauth_flow(&settings)?;
+        save_oauth_token(&settings, &token)?;
+        write_json(&json_path(&app, "settings.json")?, &settings)?;
+        Ok(format!("{} OAuth connected. The refresh token is stored in your operating system keychain.", oauth_provider_name(&settings.oauth_provider)))
+    }).await.map_err(|error| format!("OAuth task failed: {error}"))?
 }
 
 #[tauri::command]
@@ -312,10 +367,125 @@ fn validate_settings(settings: &Settings) -> Result<(), String> {
     if settings.imap_security != "tls" {
         return Err("This version supports IMAP over implicit TLS (usually port 993). Choose TLS or use your provider's TLS endpoint.".into());
     }
+    if settings.auth_mode != "password" && settings.auth_mode != "oauth" {
+        return Err("Choose app password or OAuth authentication.".into());
+    }
+    if settings.auth_mode == "oauth" {
+        if !matches!(settings.oauth_provider.as_str(), "google" | "microsoft") {
+            return Err("Choose Google or Microsoft for OAuth.".into());
+        }
+        if settings.oauth_client_id.trim().is_empty() {
+            return Err("Enter the desktop OAuth client ID issued by your provider.".into());
+        }
+    }
     if !(15..=240).contains(&settings.scan_interval_minutes) {
         return Err("Choose an automatic check interval from 15 to 240 minutes.".into());
     }
     Ok(())
+}
+
+fn oauth_provider_name(provider: &str) -> &'static str {
+    if provider == "microsoft" { "Microsoft" } else { "Google" }
+}
+
+fn oauth_endpoints(provider: &str) -> Result<(&'static str, &'static str, &'static str), String> {
+    match provider {
+        "google" => Ok(("https://accounts.google.com/o/oauth2/v2/auth", "https://oauth2.googleapis.com/token", "https://mail.google.com/")),
+        "microsoft" => Ok(("https://login.microsoftonline.com/common/oauth2/v2.0/authorize", "https://login.microsoftonline.com/common/oauth2/v2.0/token", "offline_access https://outlook.office.com/IMAP.AccessAsUser.All https://outlook.office.com/SMTP.Send")),
+        _ => Err("Choose Google or Microsoft for OAuth.".into()),
+    }
+}
+
+fn oauth_account(settings: &Settings) -> String { format!("oauth:{}:{}", settings.oauth_provider, settings.imap_username) }
+
+fn save_oauth_token(settings: &Settings, token: &OAuthToken) -> Result<(), String> {
+    let encoded = serde_json::to_string(token).map_err(|error| format!("Could not encode the OAuth token: {error}"))?;
+    set_secret(&oauth_account(settings), &encoded)
+}
+
+fn load_oauth_token(settings: &Settings) -> Result<OAuthToken, String> {
+    let encoded = supplied_or_saved(String::new(), &oauth_account(settings)).map_err(|_| "No OAuth session was found. Choose Connect with OAuth first.".to_string())?;
+    let mut token: OAuthToken = serde_json::from_str(&encoded).map_err(|_| "The saved OAuth session could not be read. Connect it again.".to_string())?;
+    if token.expires_at <= Utc::now().timestamp() + 60 {
+        token = refresh_oauth_token(settings, &token)?;
+        save_oauth_token(settings, &token)?;
+    }
+    Ok(token)
+}
+
+fn connection_secrets(settings: &Settings, imap_supplied: String, smtp_supplied: String) -> Result<(String, String), String> {
+    if settings.auth_mode == "oauth" {
+        let token = load_oauth_token(settings)?;
+        Ok((token.access_token.clone(), token.access_token))
+    } else {
+        Ok((
+            supplied_or_saved(imap_supplied, &format!("imap:{}", settings.imap_username))?,
+            supplied_or_saved(smtp_supplied, &format!("smtp:{}", settings.smtp_username))?,
+        ))
+    }
+}
+
+fn refresh_oauth_token(settings: &Settings, current: &OAuthToken) -> Result<OAuthToken, String> {
+    if current.refresh_token.is_empty() { return Err("The OAuth session expired without a refresh token. Connect it again.".into()); }
+    let (_, token_endpoint, _) = oauth_endpoints(&settings.oauth_provider)?;
+    let response = reqwest::blocking::Client::new().post(token_endpoint).form(&[
+        ("client_id", settings.oauth_client_id.as_str()),
+        ("grant_type", "refresh_token"),
+        ("refresh_token", current.refresh_token.as_str()),
+    ]).send().map_err(|error| format!("Could not refresh OAuth: {error}"))?;
+    if !response.status().is_success() { return Err(format!("The provider rejected the OAuth refresh ({}). Connect it again.", response.status())); }
+    let received: OAuthResponse = response.json().map_err(|error| format!("Could not read the refreshed OAuth token: {error}"))?;
+    Ok(OAuthToken { access_token: received.access_token, refresh_token: if received.refresh_token.is_empty() { current.refresh_token.clone() } else { received.refresh_token }, expires_at: Utc::now().timestamp() + received.expires_in })
+}
+
+fn run_oauth_flow(settings: &Settings) -> Result<OAuthToken, String> {
+    use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+    use rand::RngCore;
+    let (authorize_endpoint, token_endpoint, scope) = oauth_endpoints(&settings.oauth_provider)?;
+    let listener = TcpListener::bind("127.0.0.1:0").map_err(|error| format!("Could not open the local OAuth callback: {error}"))?;
+    listener.set_nonblocking(true).map_err(|error| format!("Could not prepare the OAuth callback: {error}"))?;
+    let redirect_uri = format!("http://127.0.0.1:{}/oauth/callback", listener.local_addr().map_err(|error| error.to_string())?.port());
+    let mut verifier_bytes = [0u8; 48]; rand::thread_rng().fill_bytes(&mut verifier_bytes);
+    let verifier = URL_SAFE_NO_PAD.encode(verifier_bytes);
+    let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
+    let mut state_bytes = [0u8; 24]; rand::thread_rng().fill_bytes(&mut state_bytes);
+    let state = URL_SAFE_NO_PAD.encode(state_bytes);
+    let query = url::form_urlencoded::Serializer::new(String::new())
+        .append_pair("client_id", &settings.oauth_client_id).append_pair("redirect_uri", &redirect_uri)
+        .append_pair("response_type", "code").append_pair("scope", scope)
+        .append_pair("code_challenge", &challenge).append_pair("code_challenge_method", "S256")
+        .append_pair("state", &state).append_pair("access_type", "offline").append_pair("prompt", "consent").finish();
+    open::that(format!("{authorize_endpoint}?{query}")).map_err(|error| format!("Could not open the provider sign-in page: {error}"))?;
+    let started = Instant::now();
+    let code = loop {
+        if started.elapsed() > Duration::from_secs(180) { return Err("OAuth timed out after three minutes. Start it again.".into()); }
+        match listener.accept() {
+            Ok((mut stream, _)) => {
+                stream.set_read_timeout(Some(Duration::from_secs(5))).ok();
+                let mut buffer = [0u8; 8192];
+                let length = stream.read(&mut buffer).map_err(|error| format!("Could not read the OAuth callback: {error}"))?;
+                let request = String::from_utf8_lossy(&buffer[..length]);
+                let target = request.lines().next().and_then(|line| line.split_whitespace().nth(1)).ok_or("The OAuth callback was malformed.")?;
+                let callback = url::Url::parse(&format!("http://localhost{target}")).map_err(|error| format!("Could not parse the OAuth callback: {error}"))?;
+                let parameters: std::collections::HashMap<_, _> = callback.query_pairs().into_owned().collect();
+                let accepted = parameters.get("state").is_some_and(|returned| returned == &state);
+                let code = parameters.get("code").filter(|_| accepted).cloned();
+                let message = if code.is_some() { "OAuth connected. You can close this tab and return to Reminder Mailroom." } else { "OAuth was not completed. Return to Reminder Mailroom and try again." };
+                let response = format!("HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", message.len(), message);
+                let _ = stream.write_all(response.as_bytes());
+                break code.ok_or("The OAuth callback did not contain a valid code. Try again.")?;
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => thread::sleep(Duration::from_millis(200)),
+            Err(error) => return Err(format!("The local OAuth callback failed: {error}")),
+        }
+    };
+    let response = reqwest::blocking::Client::new().post(token_endpoint).form(&[
+        ("client_id", settings.oauth_client_id.as_str()), ("code", code.as_str()), ("code_verifier", verifier.as_str()),
+        ("grant_type", "authorization_code"), ("redirect_uri", redirect_uri.as_str()),
+    ]).send().map_err(|error| format!("Could not exchange the OAuth code: {error}"))?;
+    if !response.status().is_success() { return Err(format!("The provider rejected the OAuth code ({}). Check the desktop client ID.", response.status())); }
+    let received: OAuthResponse = response.json().map_err(|error| format!("Could not read the OAuth token: {error}"))?;
+    Ok(OAuthToken { access_token: received.access_token, refresh_token: received.refresh_token, expires_at: Utc::now().timestamp() + received.expires_in })
 }
 
 fn validate_rule(rule: &Rule) -> Result<(), String> {
@@ -349,9 +519,13 @@ fn connect_imap(settings: &Settings, password: &str) -> Result<Session<TlsStream
     let tls = TlsConnector::builder().build().map_err(|error| format!("Could not prepare TLS: {error}"))?;
     let client = imap::connect((settings.imap_host.as_str(), settings.imap_port), &settings.imap_host, &tls)
         .map_err(|error| format!("IMAP connection failed: {error}"))?;
-    client
-        .login(&settings.imap_username, password)
-        .map_err(|(error, _)| format!("IMAP login failed: {error}. Check the username and app password."))
+    if settings.auth_mode == "oauth" {
+        client.authenticate("XOAUTH2", &XOAuth2 { username: settings.imap_username.clone(), access_token: password.into() })
+            .map_err(|(error, _)| format!("IMAP OAuth login failed: {error}. Reconnect the provider."))
+    } else {
+        client.login(&settings.imap_username, password)
+            .map_err(|(error, _)| format!("IMAP login failed: {error}. Check the username and app password."))
+    }
 }
 
 fn smtp_transport(settings: &Settings, password: &str) -> Result<SmtpTransport, String> {
@@ -362,7 +536,8 @@ fn smtp_transport(settings: &Settings, password: &str) -> Result<SmtpTransport, 
         SmtpTransport::starttls_relay(&settings.smtp_host)
     }
     .map_err(|error| format!("Could not prepare SMTP TLS: {error}"))?;
-    Ok(builder.port(settings.smtp_port).credentials(credentials).build())
+    let builder = builder.port(settings.smtp_port).credentials(credentials);
+    Ok(if settings.auth_mode == "oauth" { builder.authentication(vec![Mechanism::Xoauth2]).build() } else { builder.build() })
 }
 
 fn scan_mail_blocking(app: &AppHandle, dry_run: bool) -> Result<ScanResult, String> {
@@ -372,8 +547,9 @@ fn scan_mail_blocking(app: &AppHandle, dry_run: bool) -> Result<ScanResult, Stri
     if rules.is_empty() {
         return Err("Enable at least one sorting rule before running a sort.".into());
     }
-    let imap_secret = supplied_or_saved(String::new(), &format!("imap:{}", settings.imap_username))?;
-    let smtp_secret = if dry_run { String::new() } else { supplied_or_saved(String::new(), &format!("smtp:{}", settings.smtp_username))? };
+    let (imap_secret, smtp_secret) = if dry_run && settings.auth_mode == "password" {
+        (supplied_or_saved(String::new(), &format!("imap:{}", settings.imap_username))?, String::new())
+    } else { connection_secrets(&settings, String::new(), String::new())? };
     let mut session = connect_imap(&settings, &imap_secret)?;
     let transport = if dry_run { None } else { Some(smtp_transport(&settings, &smtp_secret)?) };
     let connection = open_db(app)?;
@@ -421,14 +597,19 @@ fn parse_candidate(raw: &[u8], rule: &Rule) -> Result<Option<Candidate>, String>
     let mut pdfs = Vec::new();
     collect_pdfs(&mail, &mut pdfs)?;
     let Some(pdf) = pdfs.into_iter().next() else { return Ok(None) };
-    let reference = mail.headers.get_first_value("In-Reply-To").or_else(|| mail.headers.get_first_value("References"));
     let normalized = normalize_subject(&subject);
-    let thread_key = reference
-        .and_then(|value| value.split_whitespace().next().map(ToOwned::to_owned))
-        .or_else(|| (!normalized.is_empty()).then_some(normalized))
-        .or_else(|| mail.headers.get_first_value("Message-ID"))
+    let mut thread_aliases = Vec::new();
+    for header in ["In-Reply-To", "References", "Message-ID"] {
+        if let Some(value) = mail.headers.get_first_value(header) {
+            thread_aliases.extend(value.split_whitespace().map(normalize_message_id).filter(|value| !value.is_empty()));
+        }
+    }
+    thread_aliases.sort();
+    thread_aliases.dedup();
+    let thread_key = (!normalized.is_empty()).then_some(normalized)
+        .or_else(|| thread_aliases.first().cloned())
         .unwrap_or_else(|| format!("subject:unknown:{}", candidate_fingerprint(&subject)));
-    Ok(Some(Candidate { subject, sender, thread_key, pdf }))
+    Ok(Some(Candidate { subject, sender, thread_key, thread_aliases, pdf }))
 }
 
 fn collect_pdfs(mail: &ParsedMail<'_>, output: &mut Vec<PdfAttachment>) -> Result<(), String> {
@@ -455,12 +636,8 @@ fn process_candidate(
     previews: &mut Vec<AuditEntry>,
 ) -> Result<(), String> {
     let hash = hex::encode(Sha256::digest(&candidate.pdf.bytes));
-    let existing = connection.query_row(
-        "SELECT thread_key, pdf_hash FROM canonicals WHERE thread_key = ?1 OR pdf_hash = ?2 LIMIT 1",
-        params![candidate.thread_key, hash],
-        |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
-    );
-    if let Ok((saved_thread, saved_hash)) = existing {
+    let existing = find_existing_canonical(connection, &candidate, &hash)?;
+    if let Some((saved_thread, saved_hash)) = existing {
         if dry_run {
             previews.push(preview_entry(&candidate, &hash, "skipped", "Already archived; this reminder would be skipped."));
         } else {
@@ -477,10 +654,37 @@ fn process_candidate(
         insert_audit(connection, &candidate, &hash, "error", &error)?;
         return Err(error);
     }
+    store_canonical(connection, &candidate, &hash)
+}
+
+fn find_existing_canonical(connection: &Connection, candidate: &Candidate, hash: &str) -> Result<Option<(String, String)>, String> {
+    let mut existing = connection.query_row(
+        "SELECT thread_key, pdf_hash FROM canonicals WHERE thread_key = ?1 OR pdf_hash = ?2 LIMIT 1",
+        params![candidate.thread_key, hash],
+        |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+    ).ok();
+    if existing.is_none() {
+        for alias in &candidate.thread_aliases {
+            existing = connection.query_row(
+                "SELECT c.thread_key, c.pdf_hash FROM canonical_aliases a JOIN canonicals c ON c.thread_key = a.thread_key WHERE a.alias = ?1 LIMIT 1",
+                [alias],
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+            ).ok();
+            if existing.is_some() { break; }
+        }
+    }
+    Ok(existing)
+}
+
+fn store_canonical(connection: &Connection, candidate: &Candidate, hash: &str) -> Result<(), String> {
     let now = Utc::now().to_rfc3339();
     let transaction = connection.unchecked_transaction().map_err(|error| format!("Could not start the audit update: {error}"))?;
     transaction.execute("INSERT INTO canonicals(thread_key, pdf_hash, archived_at) VALUES (?1, ?2, ?3)", params![candidate.thread_key, hash, now])
         .map_err(|error| format!("The invoice was sent, but its deduplication record could not be saved: {error}"))?;
+    for alias in &candidate.thread_aliases {
+        transaction.execute("INSERT OR IGNORE INTO canonical_aliases(alias, thread_key) VALUES (?1, ?2)", params![alias, candidate.thread_key])
+            .map_err(|error| format!("The invoice was sent, but its thread aliases could not be saved: {error}"))?;
+    }
     insert_audit(&transaction, &candidate, &hash, "archived", "Forwarded the first PDF in this configured invoice thread.")?;
     transaction.commit().map_err(|error| format!("The invoice was sent, but the audit update could not be finished: {error}"))
 }
@@ -518,6 +722,10 @@ fn candidate_fingerprint(value: &str) -> String {
     hex::encode(Sha256::digest(value.as_bytes()))[..16].to_string()
 }
 
+fn normalize_message_id(value: &str) -> String {
+    value.trim().trim_matches(|character| character == '<' || character == '>').to_lowercase()
+}
+
 fn normalize_subject(subject: &str) -> String {
     let prefixes = Regex::new(r"(?i)^\s*((re|fw|fwd)\s*:\s*)+").expect("valid prefix regex");
     let reminders = Regex::new(r"(?i)\b(final|friendly|payment|reminder|due|overdue|past|follow[- ]?up)\b").expect("valid reminder regex");
@@ -534,7 +742,7 @@ fn csv_escape(value: &str) -> String {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![get_snapshot, save_settings, test_connections, save_rule, delete_rule, scan_mail, export_audit])
+        .invoke_handler(tauri::generate_handler![get_snapshot, save_settings, test_connections, authorize_oauth, save_rule, delete_rule, scan_mail, export_audit])
         .run(tauri::generate_context!())
         .expect("error while running Reminder Mailroom");
 }
@@ -567,5 +775,54 @@ mod tests {
         let parsed = parse_candidate(raw, &rule).unwrap().unwrap();
         assert_eq!(parsed.pdf.name, "invoice.pdf");
         assert_eq!(parsed.pdf.bytes, b"%PDF-1.4");
+    }
+
+    #[test]
+    fn changed_pdf_reply_keeps_the_original_thread_identity() {
+        let rule = Rule { id: "1".into(), name: "Invoices".into(), subject_contains: "invoice".into(), sender_contains: "client".into(), mailbox: "INBOX".into(), enabled: true };
+        let original = b"From: client@example.com\r\nSubject: Invoice #1042\r\nMessage-ID: <original@example.com>\r\nContent-Type: application/pdf; name=invoice.pdf\r\nContent-Disposition: attachment; filename=invoice.pdf\r\n\r\n%PDF-original\r\n";
+        let reply = b"From: client@example.com\r\nSubject: Re: Payment reminder - Invoice #1042\r\nMessage-ID: <reply@example.com>\r\nIn-Reply-To: <original@example.com>\r\nContent-Type: application/pdf; name=invoice-v2.pdf\r\nContent-Disposition: attachment; filename=invoice-v2.pdf\r\n\r\n%PDF-changed\r\n";
+        let original = parse_candidate(original, &rule).unwrap().unwrap();
+        let reply = parse_candidate(reply, &rule).unwrap().unwrap();
+        assert_eq!(original.thread_key, reply.thread_key);
+        assert_ne!(Sha256::digest(&original.pdf.bytes), Sha256::digest(&reply.pdf.bytes));
+        assert!(reply.thread_aliases.contains(&"original@example.com".into()));
+    }
+
+    #[test]
+    fn fixture_flow_persists_one_canonical_skips_changed_pdf_and_leaves_errors_retryable() {
+        let connection = Connection::open_in_memory().unwrap();
+        connection.execute_batch("CREATE TABLE canonicals(thread_key TEXT PRIMARY KEY,pdf_hash TEXT NOT NULL UNIQUE,archived_at TEXT NOT NULL);CREATE TABLE canonical_aliases(alias TEXT PRIMARY KEY,thread_key TEXT NOT NULL);CREATE TABLE audit(id INTEGER PRIMARY KEY AUTOINCREMENT,occurred_at TEXT NOT NULL,subject TEXT NOT NULL,thread_key TEXT NOT NULL,pdf_hash TEXT NOT NULL,outcome TEXT NOT NULL,detail TEXT NOT NULL);").unwrap();
+        let rule = Rule { id: "1".into(), name: "Invoices".into(), subject_contains: "invoice".into(), sender_contains: "client".into(), mailbox: "INBOX".into(), enabled: true };
+        let original_raw = b"From: client@example.com\r\nSubject: Invoice #1042\r\nMessage-ID: <original@example.com>\r\nContent-Type: application/pdf; name=invoice.pdf\r\nContent-Disposition: attachment; filename=invoice.pdf\r\n\r\n%PDF-original\r\n";
+        let changed_raw = b"From: client@example.com\r\nSubject: Final reminder: Invoice #1042\r\nMessage-ID: <final@example.com>\r\nReferences: <original@example.com>\r\nContent-Type: application/pdf; name=invoice-v2.pdf\r\nContent-Disposition: attachment; filename=invoice-v2.pdf\r\n\r\n%PDF-regenerated\r\n";
+        let retry_raw = b"From: client@example.com\r\nSubject: Invoice #2048\r\nMessage-ID: <retry@example.com>\r\nContent-Type: application/pdf; name=invoice.pdf\r\nContent-Disposition: attachment; filename=invoice.pdf\r\n\r\n%PDF-retry\r\n";
+        let original = parse_candidate(original_raw, &rule).unwrap().unwrap();
+        let changed = parse_candidate(changed_raw, &rule).unwrap().unwrap();
+        let retry = parse_candidate(retry_raw, &rule).unwrap().unwrap();
+        let original_hash = hex::encode(Sha256::digest(&original.pdf.bytes));
+        let changed_hash = hex::encode(Sha256::digest(&changed.pdf.bytes));
+        let retry_hash = hex::encode(Sha256::digest(&retry.pdf.bytes));
+        assert!(find_existing_canonical(&connection, &original, &original_hash).unwrap().is_none());
+        store_canonical(&connection, &original, &original_hash).unwrap();
+        assert!(find_existing_canonical(&connection, &changed, &changed_hash).unwrap().is_some());
+        insert_audit(&connection, &changed, &changed_hash, "skipped", "Same thread, changed PDF").unwrap();
+        insert_audit(&connection, &retry, &retry_hash, "error", "SMTP unavailable").unwrap();
+        assert!(find_existing_canonical(&connection, &retry, &retry_hash).unwrap().is_none());
+        assert_eq!(connection.query_row("SELECT COUNT(*) FROM canonicals", [], |row| row.get::<_, u64>(0)).unwrap(), 1);
+        assert_eq!(connection.query_row("SELECT COUNT(*) FROM audit", [], |row| row.get::<_, u64>(0)).unwrap(), 3);
+    }
+
+    #[test]
+    fn oauth_provider_configuration_uses_pkce_endpoints_and_xoauth2() {
+        let (google_auth, google_token, google_scope) = oauth_endpoints("google").unwrap();
+        let (microsoft_auth, microsoft_token, microsoft_scope) = oauth_endpoints("microsoft").unwrap();
+        assert!(google_auth.starts_with("https://accounts.google.com/"));
+        assert_eq!(google_token, "https://oauth2.googleapis.com/token");
+        assert_eq!(google_scope, "https://mail.google.com/");
+        assert!(microsoft_auth.starts_with("https://login.microsoftonline.com/common/"));
+        assert!(microsoft_token.ends_with("/token"));
+        assert!(microsoft_scope.contains("IMAP.AccessAsUser.All"));
+        assert_eq!(xoauth2_payload("owner@example.com", "access-token"), "user=owner@example.com\x01auth=Bearer access-token\x01\x01");
     }
 }

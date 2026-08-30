@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { DAY_MS, LICENSE_CACHE_KEY, cachedLicense, consumeLicenseFromUrl, csvEscape, normalizeSubject, subjectMatches } from "../app/core";
+import { DAY_MS, LICENSE_CACHE_KEY, cachedLicense, canonicalThreadKey, consumeLicenseFromUrl, csvEscape, normalizeSubject, subjectMatches } from "../app/core";
 
 describe("invoice identity", () => {
   it("normalizes reminder boilerplate to the original invoice subject", () => {
     expect(normalizeSubject("Re: PAYMENT REMINDER — Invoice #1042")).toBe(normalizeSubject("Invoice #1042"));
+  });
+
+  it("keeps a changed-PDF reminder in the original canonical thread", () => {
+    expect(canonicalThreadKey("Final reminder: Invoice #1042")).toBe(canonicalThreadKey("Invoice #1042"));
   });
 
   it("treats comma-separated subject terms as alternatives", () => {
