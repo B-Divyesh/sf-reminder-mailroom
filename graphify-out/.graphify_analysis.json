@@ -495,11 +495,6 @@
       "degree": 12
     },
     {
-      "id": "src_tauri_src_desktop_settings",
-      "label": "Settings",
-      "degree": 11
-    },
-    {
       "id": "src_tauri_src_desktop_json_path",
       "label": "json_path()",
       "degree": 11
@@ -510,13 +505,18 @@
       "degree": 11
     },
     {
+      "id": "src_tauri_src_desktop_settings",
+      "label": "Settings",
+      "degree": 11
+    },
+    {
       "id": "app_main_openruledialog",
       "label": "openRuleDialog()",
       "degree": 10
     },
     {
-      "id": "package_scripts",
-      "label": "scripts",
+      "id": "src_tauri_src_desktop_get_snapshot",
+      "label": "get_snapshot()",
       "degree": 10
     },
     {
