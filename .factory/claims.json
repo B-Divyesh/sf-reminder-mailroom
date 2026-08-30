@@ -29,7 +29,7 @@
   },
   {
     "id": "local-interface-privacy",
-    "claim": "Viewing local rules and activity sends no data to a product server.",
+    "claim": "The desktop interface does not send rules or activity to a product server.",
     "where": "landing privacy facts, desktop navigation, privacy page, README",
     "test": "npm run test:e2e -- --grep @claim:local-interface-privacy",
     "sandbox": "fresh browser context against desktop UI; record all requests while opening rules and activity; assert same-origin only"
@@ -54,5 +54,33 @@
     "where": "landing pricing, desktop Plus view, terms, README",
     "test": "npm run test:e2e -- --grep @claim:paid-tier-copy",
     "sandbox": "fresh browser context; assert exact price, included feature, and Sociobot checkout URL"
+  },
+  {
+    "id": "thread-identity",
+    "claim": "Separate invoices with the same subject stay separate, while RFC-linked replies share one invoice thread.",
+    "where": "desktop rules, README",
+    "test": "cargo test --manifest-path src-tauri/Cargo.toml claim_thread_identity",
+    "sandbox": "deterministic MIME fixtures for two senders and a recurring invoice with the same subject"
+  },
+  {
+    "id": "concurrent-scan-safety",
+    "claim": "Only one scan can deliver a canonical invoice at a time.",
+    "where": "README",
+    "test": "cargo test --manifest-path src-tauri/Cargo.toml claim_concurrent_scan_gate",
+    "sandbox": "two deterministic concurrent delivery paths share the native scan gate"
+  },
+  {
+    "id": "desktop-sample-project",
+    "claim": "The installed app can load an in-memory sample project without contacting a mailbox.",
+    "where": "desktop first-run screen and landing walkthrough",
+    "test": "npm run test:e2e -- --grep @claim:desktop-sample-project",
+    "sandbox": "fresh desktop webview fixture; invoke bundled sample action and assert one archive, two skips, and no mailbox action"
+  },
+  {
+    "id": "installer-checksum",
+    "claim": "The macOS and Linux install script checks SHA-256 before installing a release asset.",
+    "where": "landing download panel and README",
+    "test": "npm run test:installer",
+    "sandbox": "isolated local curl fixture; execute the published POSIX script and assert only the checksum-matched asset is installed"
   }
 ]

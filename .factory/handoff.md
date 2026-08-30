@@ -1,49 +1,45 @@
-# Reminder Mailroom independent verification handoff
+# Reminder Mailroom repair handoff
 
-## Outcome
+## Repair scope
 
-**FAIL — do not release candidate `4592e686b42149e6df67f21597a7ee1bebb5a38b`.**
+Repaired the independent verifier findings from `a4fd0bb3edabf689a24218efe12f21314b8f1a93` while retaining the Tauri 2 desktop app and static landing-site deployment.
 
-Tested on 2026-08-30 against <https://reminder-mailroom.sociobot.in/>. Full evidence and reproduction details are in [verification-2.md](verification-2.md).
+- Canonical identity now uses RFC `In-Reply-To`/`References`/`Message-ID` values, never a normalized subject. Separate same-subject invoices, recurring invoices, reply chains, changed PDFs, and the 500-message boundary have native regressions.
+- The full native scan is guarded by one process-wide mutex, so manual and timed scans cannot interleave a lookup and SMTP delivery.
+- The installed first-run app now has **Load sample project**. It returns the three-message Northstar sample in memory and does not alter real local storage or contact a mailbox. The landing page includes three captioned, original app walkthrough captures.
+- Fixed the delete alertdialog’s Tab/Shift+Tab trap, Escape close, and focus return.
+- Fixed dark-mode contrast and accessible mobile home names across landing, Privacy, Terms, and 404. Browser coverage now scans each public route at 390 px in both themes.
+- Replaced GNU-only macOS `find` use in `install.sh`, added an isolated checksum execution test, and run it in Linux/macOS release jobs. The Windows installer gets an equivalent PowerShell fixture in its release job.
+- Added claims for native thread identity, concurrent scan safety, installed sample data, and installer checksum verification. Added the required first-screen privacy/offline/price facts.
 
-## Release blockers
+## Verification
 
-- The live **Buy Mailroom Plus** endpoint returns HTTP 404, so the advertised $29 one-time purchase cannot be completed.
-- Native deduplication uses normalized subject as a globally unique thread key. Separate clients or recurring invoice threads with the same subject can lose a required canonical archive record.
-- Concurrent scans can both send before either writes the SQLite canonical row, allowing duplicate delivery.
-- Material site/README claims about mailbox privacy, keychain storage, oldest-message selection, installer checksum verification, and purchase functionality are absent from `.factory/claims.json`.
-- Live axe scans find serious dark-theme contrast failures and unnamed mobile home links on Privacy, Terms, and 404.
-- The delete alert dialog leaks keyboard focus and does not close with Escape.
-- The macOS shell installer uses GNU-only `find -maxdepth`, so the advertised one-line install is not portable to stock macOS.
-- The desktop artifact lacks the required installed first-run sample flow and captioned walkthrough.
-
-## What passed
-
-- Cold first-read and one-click `/demo/` gate.
-- All eight exact claim commands after `npm ci`.
-- `npm test`: 6 Vitest + 3 reduced Rust tests.
-- Full `cargo test --manifest-path src-tauri/Cargo.toml`: 7 native tests after installing the documented Linux Tauri prerequisites.
-- `npx tsc --noEmit`.
-- `npm run build`: produced `dist/app` and `dist/site`; bundles are within budget.
-- `npm run test:e2e`: 12 passed.
-- Live static files match the candidate build by SHA-256; headers, immutable asset caching, routes, 404, privacy request boundary, offline reload, and service-worker cache update behavior pass.
-- Successful fresh Lighthouse: 100/100/100/100, LCP 1.4 s, TBT 10 ms, CLS 0.
-- Release run `33297139260` passed all platform jobs; v0.2.0 has all required formats, manifest, and checksums. Fresh RPM and DEB checksum/extraction checks passed.
-- License verification allowance: requests 1–30 returned 200; request 31 returned 429 with `Retry-After: 3`.
-
-## How to reproduce
+Executed after `npm ci`:
 
 ```sh
-npm ci
 npm test
 cargo test --manifest-path src-tauri/Cargo.toml
 npx tsc --noEmit
-npm run build
+npm run test:installer
 npm run test:e2e
+npm run build
 ```
 
-Run every declared claim independently using the exact commands in `.factory/claims.json`. On Ubuntu, install the Tauri packages documented in README before the full default-feature Rust test.
+Results: 6 Vitest + 3 no-default-feature Rust tests, 9 native Rust tests, 15 Playwright tests, and production build all pass. Every command in `.factory/claims.json` was run independently after the clean install. The site’s browser suite includes offline reload, service-worker update, desktop/mobile keyboard paths, and public-route axe scans. `verify-url.sh` against the final local production preview reported HTTP 200, no console errors, title/lang, one h1, main landmark, and no missing image alt text. Evidence is in `.factory/evidence/repair-2/`.
 
-## Scope and safety
+Mobile Lighthouse against that preview: Performance **99**, Accessibility **100**, SEO **100**, LCP **1.7 s**, CLS **0**. The standalone `@axe-core/cli` could not start its Selenium Chrome binary in this worker; the repository’s Playwright axe integration ran successfully instead.
 
-No product code, deployment, infrastructure, DNS, database, app setting, secret, or unrelated service was changed. Only this verification report and handoff were authored. Pre-existing `graphify-out` worktree changes were preserved and excluded from the verifier commit.
+The native toolchain emits the existing upstream `imap-proto 0.10.2` future-incompatibility warning; no current test or build fails because of it.
+
+## Billing registration
+
+The repository correctly links the required Sociobot checkout and verifies licenses, but the verifier’s live 404 is an external product-registration state. No billing-provisioning script or credential is present in this repository or worker environment, and the work order prohibits reading or changing non-`sf-reminder-mailroom` resources. The checkout registration therefore remains operator/factory work outside this code repair; do not represent a release as purchase-verified until the registered product endpoint returns the hosted checkout flow.
+
+## Deployment
+
+Static deployment is pending the repair commit and push. Deploy `dist/site` with the factory static deployment configuration for `reminder-mailroom`; no container, database, or unrelated service is involved.
+
+## Operator follow-up
+
+- Register/enable the existing `reminder-mailroom` one-time product in the Sociobot billing engine, then verify the hosted checkout response before release.
+- Provide Apple and Windows signing certificates if signed desktop packages are required. The release workflow deliberately ships unsigned builds until those credentials are supplied.

@@ -7,7 +7,6 @@ use lettre::{
 };
 use mailparse::{parse_mail, MailHeaderMap, ParsedMail};
 use native_tls::{TlsConnector, TlsStream};
-use regex::Regex;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -17,6 +16,7 @@ use std::{
     io::{Read, Write},
     net::{TcpListener, TcpStream},
     path::{Path, PathBuf},
+    sync::{Arc, Mutex},
     thread,
     time::{Duration, Instant},
 };
@@ -130,6 +130,12 @@ struct Candidate {
     thread_aliases: Vec<String>,
     pdf: PdfAttachment,
 }
+
+/// A single mailbox can be opened by a manual run and the automatic timer at
+/// nearly the same time.  The gate covers the complete read → decide → send →
+/// record operation, so two scans cannot both deliver the same invoice.
+#[derive(Clone)]
+struct ScanGate(Arc<Mutex<()>>);
 
 fn data_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let path = app
@@ -248,6 +254,20 @@ async fn get_snapshot(app: AppHandle) -> Result<Snapshot, String> {
     .map_err(|error| format!("Local data task failed: {error}"))?
 }
 
+/// The installed app's first-run sample is deliberately in-memory. It gives a
+/// new owner a complete three-message result without creating settings, rules,
+/// or audit rows in their real local workspace.
+#[tauri::command]
+async fn load_sample_project() -> Result<Snapshot, String> {
+    let rule = Rule { id: "sample-northstar".into(), name: "Northstar invoices (sample)".into(), subject_contains: "invoice".into(), sender_contains: "northstar.example".into(), mailbox: "Sample inbox".into(), enabled: true };
+    let entries = vec![
+        AuditEntry { id: -3, occurred_at: "2026-03-02T09:00:00Z".into(), subject: "Invoice #1042".into(), thread_key: "original-1042@northstar.example".into(), pdf_hash: "7dc0f0324a5e".into(), outcome: "archived".into(), detail: "First PDF in this RFC message thread. No mailbox was contacted.".into() },
+        AuditEntry { id: -2, occurred_at: "2026-03-23T09:00:00Z".into(), subject: "Re: Payment reminder — Invoice #1042".into(), thread_key: "original-1042@northstar.example".into(), pdf_hash: "7dc0f0324a5e".into(), outcome: "skipped".into(), detail: "Matched the same PDF fingerprint.".into() },
+        AuditEntry { id: -1, occurred_at: "2026-04-02T09:00:00Z".into(), subject: "Final reminder: Invoice #1042".into(), thread_key: "original-1042@northstar.example".into(), pdf_hash: "e44a901ca21b".into(), outcome: "skipped".into(), detail: "Matched the original RFC message thread; changed PDF was not forwarded.".into() },
+    ];
+    Ok(Snapshot { settings: None, rules: vec![rule], audit: entries, archived_count: 1, duplicate_count: 2 })
+}
+
 #[tauri::command]
 async fn save_settings(
     app: AppHandle,
@@ -331,8 +351,12 @@ async fn delete_rule(app: AppHandle, id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn scan_mail(app: AppHandle, dry_run: bool) -> Result<ScanResult, String> {
-    tauri::async_runtime::spawn_blocking(move || scan_mail_blocking(&app, dry_run))
+async fn scan_mail(app: AppHandle, dry_run: bool, gate: tauri::State<'_, ScanGate>) -> Result<ScanResult, String> {
+    let gate = gate.0.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let _scan = gate.lock().map_err(|_| "The mail scan lock could not be acquired.".to_string())?;
+        scan_mail_blocking(&app, dry_run)
+    })
         .await
         .map_err(|error| format!("Mail scan task failed: {error}"))?
 }
@@ -564,7 +588,7 @@ fn scan_mail_blocking(app: &AppHandle, dry_run: bool) -> Result<ScanResult, Stri
                 .map_err(|error| format!("Could not search mailbox “{}”: {error}", rule.mailbox))?;
             uids.extend(found);
         }
-        let selected: Vec<u32> = uids.into_iter().rev().take(SEARCH_LIMIT).collect::<Vec<_>>().into_iter().rev().collect();
+        let selected = select_recent_uids(uids);
         if selected.is_empty() { continue; }
         let sequence = selected.iter().map(u32::to_string).collect::<Vec<_>>().join(",");
         let fetched = session.uid_fetch(sequence, "BODY.PEEK[]")
@@ -587,6 +611,10 @@ fn scan_mail_blocking(app: &AppHandle, dry_run: bool) -> Result<ScanResult, Stri
     Ok(ScanResult { entries, archived_count, duplicate_count })
 }
 
+fn select_recent_uids(uids: BTreeSet<u32>) -> Vec<u32> {
+    uids.into_iter().rev().take(SEARCH_LIMIT).collect::<Vec<_>>().into_iter().rev().collect()
+}
+
 fn parse_candidate(raw: &[u8], rule: &Rule) -> Result<Option<Candidate>, String> {
     let mail = parse_mail(raw).map_err(|error| format!("A matched message could not be parsed: {error}"))?;
     let subject = mail.headers.get_first_value("Subject").unwrap_or_else(|| "(No subject)".into());
@@ -597,18 +625,28 @@ fn parse_candidate(raw: &[u8], rule: &Rule) -> Result<Option<Candidate>, String>
     let mut pdfs = Vec::new();
     collect_pdfs(&mail, &mut pdfs)?;
     let Some(pdf) = pdfs.into_iter().next() else { return Ok(None) };
-    let normalized = normalize_subject(&subject);
-    let mut thread_aliases = Vec::new();
-    for header in ["In-Reply-To", "References", "Message-ID"] {
-        if let Some(value) = mail.headers.get_first_value(header) {
-            thread_aliases.extend(value.split_whitespace().map(normalize_message_id).filter(|value| !value.is_empty()));
-        }
-    }
+    // RFC thread identifiers are the only safe way to join a changed-PDF
+    // reminder to its original invoice.  A normalized subject is useful for
+    // display and searching, but is deliberately never an identity: different
+    // clients routinely use the same invoice subject.
+    let parent_aliases = ["In-Reply-To", "References"].into_iter()
+        .filter_map(|header| mail.headers.get_first_value(header))
+        .flat_map(|value| value.split_whitespace().map(normalize_message_id).collect::<Vec<_>>())
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>();
+    let own_aliases = mail.headers.get_first_value("Message-ID")
+        .into_iter().flat_map(|value| value.split_whitespace().map(normalize_message_id).collect::<Vec<_>>())
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>();
+    let mut thread_aliases = parent_aliases.clone();
+    thread_aliases.extend(own_aliases.clone());
     thread_aliases.sort();
     thread_aliases.dedup();
-    let thread_key = (!normalized.is_empty()).then_some(normalized)
-        .or_else(|| thread_aliases.first().cloned())
-        .unwrap_or_else(|| format!("subject:unknown:{}", candidate_fingerprint(&subject)));
+    let thread_key = parent_aliases.first().cloned()
+        .or_else(|| own_aliases.first().cloned())
+        // Messages without RFC IDs cannot be reliably threaded. Keep their
+        // raw-message fingerprint distinct rather than dropping an invoice.
+        .unwrap_or_else(|| format!("unlinked:{}", candidate_fingerprint(std::str::from_utf8(raw).unwrap_or("message"))));
     Ok(Some(Candidate { subject, sender, thread_key, thread_aliases, pdf }))
 }
 
@@ -726,15 +764,6 @@ fn normalize_message_id(value: &str) -> String {
     value.trim().trim_matches(|character| character == '<' || character == '>').to_lowercase()
 }
 
-fn normalize_subject(subject: &str) -> String {
-    let prefixes = Regex::new(r"(?i)^\s*((re|fw|fwd)\s*:\s*)+").expect("valid prefix regex");
-    let reminders = Regex::new(r"(?i)\b(final|friendly|payment|reminder|due|overdue|past|follow[- ]?up)\b").expect("valid reminder regex");
-    let separators = Regex::new(r"[^a-z0-9]+").expect("valid separator regex");
-    let without_prefix = prefixes.replace_all(subject, "");
-    let without_reminder = reminders.replace_all(&without_prefix, "").to_lowercase();
-    separators.replace_all(&without_reminder, " ").trim().to_string()
-}
-
 fn csv_escape(value: &str) -> String {
     if value.contains([',', '"', '\n']) { format!("\"{}\"", value.replace('"', "\"\"")) } else { value.into() }
 }
@@ -742,7 +771,8 @@ fn csv_escape(value: &str) -> String {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![get_snapshot, save_settings, test_connections, authorize_oauth, save_rule, delete_rule, scan_mail, export_audit])
+        .manage(ScanGate(Arc::new(Mutex::new(()))))
+        .invoke_handler(tauri::generate_handler![get_snapshot, load_sample_project, save_settings, test_connections, authorize_oauth, save_rule, delete_rule, scan_mail, export_audit])
         .run(tauri::generate_context!())
         .expect("error while running Reminder Mailroom");
 }
@@ -750,11 +780,6 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn reminder_subjects_share_a_canonical_key() {
-        assert_eq!(normalize_subject("Invoice #1042"), normalize_subject("Re: PAYMENT REMINDER — Invoice #1042"));
-    }
 
     #[test]
     fn comma_separated_subject_terms_are_alternatives() {
@@ -787,6 +812,52 @@ mod tests {
         assert_eq!(original.thread_key, reply.thread_key);
         assert_ne!(Sha256::digest(&original.pdf.bytes), Sha256::digest(&reply.pdf.bytes));
         assert!(reply.thread_aliases.contains(&"original@example.com".into()));
+    }
+
+    #[test]
+    // @claim:thread-identity
+    fn claim_thread_identity_same_subject_invoices_remain_separate_without_a_shared_rfc_thread() {
+        let rule = Rule { id: "1".into(), name: "Invoices".into(), subject_contains: "invoice".into(), sender_contains: "".into(), mailbox: "INBOX".into(), enabled: true };
+        let client_a = parse_candidate(b"From: billing@alpha.example\r\nSubject: Invoice\r\nMessage-ID: <alpha-1042@example>\r\nContent-Type: application/pdf\r\n\r\n%PDF-alpha", &rule).unwrap().unwrap();
+        let client_b = parse_candidate(b"From: billing@bravo.example\r\nSubject: Invoice\r\nMessage-ID: <bravo-1042@example>\r\nContent-Type: application/pdf\r\n\r\n%PDF-bravo", &rule).unwrap().unwrap();
+        let recurring = parse_candidate(b"From: billing@alpha.example\r\nSubject: Invoice\r\nMessage-ID: <alpha-1043@example>\r\nContent-Type: application/pdf\r\n\r\n%PDF-next", &rule).unwrap().unwrap();
+        assert_ne!(client_a.thread_key, client_b.thread_key);
+        assert_ne!(client_a.thread_key, recurring.thread_key);
+    }
+
+    #[test]
+    fn scan_limit_keeps_the_newest_500_messages_in_mailbox_order() {
+        let selected = select_recent_uids((1..=600).collect());
+        assert_eq!(selected.len(), SEARCH_LIMIT);
+        assert_eq!(selected.first(), Some(&101));
+        assert_eq!(selected.last(), Some(&600));
+    }
+
+    #[test]
+    // @claim:concurrent-scan-safety
+    fn claim_concurrent_scan_gate_allows_only_one_concurrent_delivery_path() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Barrier;
+        let gate = Arc::new(Mutex::new(()));
+        let started = Arc::new(Barrier::new(2));
+        let in_flight = Arc::new(AtomicUsize::new(0));
+        let peak = Arc::new(AtomicUsize::new(0));
+        let delivered = Arc::new(AtomicUsize::new(0));
+        let mut workers = Vec::new();
+        for _ in 0..2 {
+            let gate = gate.clone(); let started = started.clone(); let in_flight = in_flight.clone(); let peak = peak.clone(); let delivered = delivered.clone();
+            workers.push(thread::spawn(move || {
+                started.wait();
+                let _lock = gate.lock().unwrap();
+                let now = in_flight.fetch_add(1, Ordering::SeqCst) + 1;
+                peak.fetch_max(now, Ordering::SeqCst);
+                if delivered.load(Ordering::SeqCst) == 0 { delivered.fetch_add(1, Ordering::SeqCst); }
+                in_flight.fetch_sub(1, Ordering::SeqCst);
+            }));
+        }
+        for worker in workers { worker.join().unwrap(); }
+        assert_eq!(peak.load(Ordering::SeqCst), 1);
+        assert_eq!(delivered.load(Ordering::SeqCst), 1);
     }
 
     #[test]

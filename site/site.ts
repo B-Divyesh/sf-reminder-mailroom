@@ -18,7 +18,9 @@ async function platformKey() {
   if (platform.includes("mac") || agent.includes("mac")) {
     try {
       const data = navigator.userAgentData && await navigator.userAgentData.getHighEntropyValues(["architecture"]);
-      return data?.architecture === "arm" ? "macos_arm64" : "macos_x64";
+      // Safari does not expose userAgentData. Modern macOS Safari is most
+      // commonly Apple silicon; the explicit Intel link remains beside it.
+      return data ? (data.architecture === "arm" ? "macos_arm64" : "macos_x64") : "macos_arm64";
     } catch { return "macos_arm64"; }
   }
   return "linux";

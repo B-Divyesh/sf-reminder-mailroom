@@ -140,13 +140,66 @@ test("desktop app and demo are keyboard-ready and accessible", async ({ page }) 
   await expect(page.locator("#main")).toBeFocused();
   let results = await new AxeBuilder({ page }).analyze();
   expect(results.violations.filter((violation) => ["serious", "critical"].includes(violation.impact ?? ""))).toEqual([]);
+  await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
   await page.goto("/demo/");
   results = await new AxeBuilder({ page }).analyze();
   expect(results.violations.filter((violation) => ["serious", "critical"].includes(violation.impact ?? ""))).toEqual([]);
-  await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
-  results = await new AxeBuilder({ page }).analyze();
-  expect(results.violations.filter((violation) => ["serious", "critical"].includes(violation.impact ?? ""))).toEqual([]);
   expect(errors).toEqual([]);
+});
+
+test("public routes remain accessible at 390px in light and dark themes", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    for (const route of ["/", "/privacy/", "/terms/", "/missing-page"]) {
+      await page.goto(route);
+      const results = await new AxeBuilder({ page }).analyze();
+      expect(results.violations.filter((violation) => ["serious", "critical"].includes(violation.impact ?? ""))).toEqual([]);
+      await page.keyboard.press("Tab");
+      await expect(page.getByRole("link", { name: "Skip to main content" })).toBeFocused();
+    }
+  }
+});
+
+test("delete confirmation traps focus, closes on Escape, and restores its trigger", async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as unknown as { __TAURI_INTERNALS__: { invoke: (command: string) => Promise<unknown> } }).__TAURI_INTERNALS__ = {
+      invoke: async (command) => command === "get_snapshot" ? { settings: null, rules: [{ id: "rule-1", name: "Client invoices", subjectContains: "invoice", senderContains: "", mailbox: "INBOX", enabled: true }], audit: [], archivedCount: 0, duplicateCount: 0 } : undefined
+    };
+  });
+  await page.goto("http://127.0.0.1:4174");
+  await page.getByRole("button", { name: "Sorting rules" }).click();
+  const trigger = page.getByRole("button", { name: "Delete Client invoices" });
+  await trigger.click();
+  const dialog = page.getByRole("alertdialog");
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Delete rule" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Keep rule" })).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(page.getByRole("button", { name: "Delete rule" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+});
+
+test("@claim:desktop-sample-project loads an in-memory first-run sample", async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as unknown as { __TAURI_INTERNALS__: { invoke: (command: string) => Promise<unknown> } }).__TAURI_INTERNALS__ = {
+      invoke: async (command) => {
+        if (command === "get_snapshot") return { settings: null, rules: [], audit: [], archivedCount: 0, duplicateCount: 0 };
+        if (command === "load_sample_project") return { settings: null, rules: [{ id: "sample", name: "Northstar invoices (sample)", subjectContains: "invoice", senderContains: "northstar.example", mailbox: "Sample inbox", enabled: true }], audit: [{ id: -1, occurredAt: "2026-03-02T09:00:00Z", subject: "Invoice #1042", threadKey: "original", pdfHash: "7dc0", outcome: "archived", detail: "First PDF in this RFC message thread. No mailbox was contacted." }], archivedCount: 1, duplicateCount: 2 };
+        throw new Error(`Unexpected command: ${command}`);
+      }
+    };
+  });
+  await page.goto("http://127.0.0.1:4174");
+  await page.getByRole("button", { name: "Load sample project" }).click();
+  await expect(page.getByRole("heading", { name: "A receipt for every decision" })).toBeVisible();
+  await expect(page.locator("#stat-archived")).toHaveText("1");
+  await expect(page.locator("#stat-skipped")).toHaveText("2");
+  await expect(page.locator("#audit-list").getByText("No mailbox was contacted.")).toBeVisible();
 });
 
 test("landing and demo remain usable at 390px and 200% text", async ({ page }) => {

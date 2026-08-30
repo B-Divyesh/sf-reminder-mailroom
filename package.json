@@ -12,6 +12,7 @@
     "test": "vitest run && cargo test --manifest-path src-tauri/Cargo.toml --no-default-features",
     "test:web": "vitest run",
     "test:e2e": "playwright test",
+    "test:installer": "sh tests/install.sh",
     "tauri": "tauri"
   },
   "dependencies": {

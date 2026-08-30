@@ -61,6 +61,7 @@ function setupView() {
   return `<section class="view active" data-section="setup" aria-labelledby="setup-heading">
     <h2 id="setup-heading">Connect your mailroom</h2>
     <p class="section-intro">Use an app password or connect Google and Microsoft with OAuth. OAuth tokens stay in your operating system keychain.</p>
+    <div class="sample-project" id="sample-project"><div><strong>Try the shipped sample first</strong><p>Load three Northstar invoice messages to see one archive and two duplicate decisions. It does not contact a mailbox.</p></div><button class="button secondary" type="button" id="load-sample-project">Load sample project</button></div>
     <form id="settings-form">
       <fieldset><legend>Sign-in method</legend><div class="form-grid">
         ${selectField("auth-mode", "Authentication", [["password", "App password"], ["oauth", "OAuth 2.0"]])}
@@ -197,6 +198,8 @@ function confirmDelete(id: string) {
   const rule = snapshot.rules.find(r => r.id === id); if (!rule) return;
   lastFocused = document.activeElement as HTMLElement;
   $("#dialog-root").innerHTML = `<div class="dialog-backdrop"><div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="delete-title" aria-describedby="delete-copy"><h2 id="delete-title">Delete “${safe(rule.name)}”?</h2><p id="delete-copy">Existing audit entries stay intact. New messages will no longer be checked against this rule.</p><div class="actions"><button class="button danger" id="confirm-delete">Delete rule</button><button class="button secondary" id="cancel-dialog">Keep rule</button></div></div></div>`;
+  $(".dialog").addEventListener("keydown", trapDialogKeys);
+  $(".dialog-backdrop").addEventListener("mousedown", event => { if (event.target === event.currentTarget) closeDialog(); });
   $("#cancel-dialog").addEventListener("click", closeDialog); $("#cancel-dialog").focus();
   $("#confirm-delete").addEventListener("click", async () => { try { await call("delete_rule", { id }); snapshot.rules = snapshot.rules.filter(r => r.id !== id); renderRules(); renderAudit(); closeDialog(); toast("Rule deleted."); } catch (e) { toast(String(e), true); } });
 }
@@ -254,6 +257,13 @@ function updateOnline() { $("#offline").classList.toggle("visible", !navigator.o
 document.querySelectorAll<HTMLElement>("[data-view]").forEach(button => button.addEventListener("click", () => switchView(button.dataset.view!)));
 $("#auth-mode").addEventListener("change", () => { updateAuthFields(); applyProviderDefaults(); });
 $("#oauth-provider").addEventListener("change", applyProviderDefaults);
+$("#load-sample-project").addEventListener("click", async () => {
+  try {
+    snapshot = await call<AppSnapshot>("load_sample_project");
+    fillSettings(); renderRules(); renderAudit(); switchView("activity");
+    setStatus("#run-status", "Sample loaded. It contains one archived invoice and two skipped reminders; no mailbox was contacted.", false, true);
+  } catch (error) { toast(String(error), true); }
+});
 $("#authorize-oauth").addEventListener("click", async () => {
   const button = $<HTMLButtonElement>("#authorize-oauth");
   button.disabled = true;

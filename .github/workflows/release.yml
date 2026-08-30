@@ -47,6 +47,13 @@ jobs:
       - run: npm ci
       - name: Test deterministic core
         run: npm test
+      - name: Execute published installer checks
+        if: matrix.platform == 'linux' || matrix.platform == 'macos-x64'
+        run: sh tests/install.sh
+      - name: Execute published Windows installer check
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: ./tests/install.ps1
       - name: Build Tauri bundles
         uses: tauri-apps/tauri-action@v0
         with:

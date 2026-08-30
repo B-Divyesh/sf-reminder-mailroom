@@ -36,7 +36,15 @@ if [ "$(uname -s)" = "Darwin" ]; then
   MOUNT="$TMP_DIR/mount"
   mkdir "$MOUNT"
   hdiutil attach "$ASSET" -nobrowse -mountpoint "$MOUNT" >/dev/null
-  APP="$(find "$MOUNT" -maxdepth 1 -name '*.app' -print -quit)"
+  # BSD find (the macOS default) does not implement GNU find's -maxdepth or
+  # -quit options. The DMG contains one app at its root; stop portably after
+  # the first match.
+  APP="$(find "$MOUNT" -name '*.app' -print | sed -n '1p')"
+  if [ -z "$APP" ]; then
+    hdiutil detach "$MOUNT" >/dev/null || true
+    printf '%s\n' "The verified DMG did not contain a Reminder Mailroom app." >&2
+    exit 1
+  fi
   DEST="$HOME/Applications"
   mkdir -p "$DEST"
   cp -R "$APP" "$DEST/"

@@ -8,9 +8,11 @@ One-click sample: <https://reminder-mailroom.sociobot.in/demo/>
 
 ## What it does
 
-The app searches the IMAP mailbox and subjects you choose. It reads matching PDFs without marking source messages as read. The first PDF in an invoice thread is sent to your accounting mailbox over SMTP. Later copies, including regenerated PDFs in the same thread, are skipped and recorded in a local SQLite audit.
+The app searches the IMAP mailbox and subjects you choose. It reads matching PDFs without marking source messages as read. RFC message IDs connect an original invoice with its replies; unrelated invoices with the same subject stay separate. The first PDF in a linked invoice thread is sent to your accounting mailbox over SMTP. Later copies, including regenerated PDFs in that thread, are skipped and recorded in a local SQLite audit. A process-wide scan gate prevents overlapping manual and scheduled scans from delivering the same canonical invoice twice.
 
 The bundled demo contains three messages for invoice #1042. One is the original, one repeats its PDF, and one has a changed PDF. Running the sample produces one archive decision and two duplicate decisions. The demo uses only `demo:reminder-mailroom` browser storage and works offline after its first visit.
+
+The installed app also includes **Load sample project** on its first screen. It loads the same three-message result in memory and does not write to your mailbox settings, rules, or audit history.
 
 ## Sign in to mail
 
@@ -47,6 +49,7 @@ Use Node 22+, Rust stable, and the Tauri 2 system libraries for your OS.
 npm ci
 npm test
 npm run test:e2e
+npm run test:installer
 npx tsc --noEmit
 npm run build
 ```

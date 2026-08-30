@@ -7,3 +7,4 @@
 - Storage: only the `demo:reminder-mailroom` localStorage key. The demo does not read production app storage.
 - Reset: choose **Reset demo** in the persistent banner. **Start for real** clears demo state and opens the download section.
 - Network boundary: the demo uses same-origin static files only. It never contacts mail, billing, analytics, or GitHub services.
+- Installed app sample: **Load sample project** on the first-run Mailboxes screen returns the same three-message result from bundled in-memory data. It does not write to the real settings, rules, or audit storage and does not contact a mailbox.

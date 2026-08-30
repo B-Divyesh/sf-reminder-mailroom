@@ -8,6 +8,9 @@ Audited 30 August 2026. Counts treat contractions and hyphenated terms as one wo
 | For solo businesses that send payment reminders, Mailroom keeps one invoice in the accounting archive. | 15 | Pass |
 | Try it with sample data | 6 | Pass |
 | The sample opens a private demo and saves nothing to your mailbox. | 12 | Pass |
+| Private sample data | 3 | Pass |
+| Works offline after one visit | 5 | Pass |
+| Plus costs $29 once | 4 | Pass |
 | Never touches your invoice workflow. | 5 | Pass |
 | Keep sending from the tool you already use. | 8 | Pass |
 | Never uploads your mailbox. | 4 | Pass |
@@ -27,6 +30,16 @@ Audited 30 August 2026. Counts treat contractions and hyphenated terms as one wo
 | Invoice senders deliver mail. | 4 | Pass |
 | Accounting inboxes ingest it. | 4 | Pass |
 | Mailroom handles the local routing decision between them. | 8 | Pass |
+| Load a sample before connecting mail | 7 | Pass |
+| The desktop app includes an in-memory Northstar sample. | 8 | Pass |
+| It never contacts a mailbox. | 5 | Pass |
+| Load the sample project | 5 | Pass |
+| See the workflow without entering a mailbox or password. | 9 | Pass |
+| Review the sorting rule | 5 | Pass |
+| The sample makes its subject, sender, and mailbox rule visible. | 10 | Pass |
+| Inspect the local receipt | 5 | Pass |
+| One original is archived. | 4 | Pass |
+| Repeated reminders are skipped. | 4 | Pass |
 | Mail connects directly from your computer | 6 | Pass |
 | Mail travels directly between your configured IMAP and SMTP servers. | 10 | Pass |
 | Credentials use the operating system keychain. | 7 | Pass |

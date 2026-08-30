@@ -58,6 +58,8 @@ p { line-height: 1.55; }
 .view.active { display: block; animation: settle 180ms ease-out; }
 @keyframes settle { from { opacity: 0; transform: translateY(6px); } }
 .section-intro { max-width: 68ch; color: var(--muted); }
+.sample-project { max-width: 760px; margin: 24px 0 32px; padding: 18px 20px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border: 1px solid var(--line); border-left: 4px solid var(--accent); background: var(--surface); }
+.sample-project p { max-width:54ch; margin:4px 0 0; color:var(--muted); font-size:15px; }
 .form-grid { margin: 30px 0 20px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 24px; }
 .field { display: grid; gap: 7px; }
 .field.span-2 { grid-column: span 2; }
@@ -138,6 +140,7 @@ fieldset { margin: 28px 0; padding: 0; border: 0; }
   .topline { display: block; margin-bottom: 34px; }
   .connection-pill { margin-top: 20px; width: max-content; }
   .form-grid { grid-template-columns: 1fr; }
+  .sample-project { align-items:flex-start; flex-direction:column; }
   .field.span-2 { grid-column: auto; }
   .stats { grid-template-columns: 1fr; }
   .audit-row { grid-template-columns: 1fr auto; gap: 5px 12px; }
