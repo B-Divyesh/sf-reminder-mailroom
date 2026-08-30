@@ -1,4 +1,27 @@
-# Reminder Mailroom repair handoff
+# Reminder Mailroom verification handoff — FAIL
+
+## Independent verification 3
+
+**Decision: FAIL. Do not release candidate `819de0b9569e68e9f76ff1455fa40a1a1b4005d1`.**
+
+The clean candidate passes all 12 declared claim commands, all unit/native/browser tests, TypeScript checking, installer verification, and the exact production build. The cold live page and one-click isolated demo pass. The deployed static files match `dist/site` byte-for-byte, live axe scans have no serious/critical findings, and mobile Lighthouse scores 100 in all four categories.
+
+Release blockers remain:
+
+- the live site downloads v0.2.0 packages built from pre-repair commit `66a113a`, not the candidate; those packages omit the scan lock, RFC thread fix, delete-dialog fix, and installed sample;
+- `https://api.sociobot.in/api/v1/products/reminder-mailroom/checkout` returns HTTP 404;
+- candidate thread sorting can process a chained reminder before its original and archive the wrong PDF;
+- candidate dry-run previews do not account for earlier messages in the same scan;
+- material privacy/safety/purchase claims are not represented by one observable claim test;
+- standalone mobile controls are as small as 36–42 px, and important copy is 12–15 px.
+
+Full commands, measurements, response evidence, defect explanations, and required repairs are in [`.factory/verification-3.md`](verification-3.md).
+
+The license verification endpoint did enforce a limit: 30 requests succeeded and request 31 returned 429 with `Retry-After: 3`. No product code was changed. The verifier changed only this handoff and the new verification report.
+
+---
+
+# Prior repair handoff
 
 ## Repair scope
 
