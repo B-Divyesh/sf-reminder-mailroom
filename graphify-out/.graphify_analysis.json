@@ -531,13 +531,13 @@
   },
   "gods": [
     {
-      "id": "src_tauri_src_desktop_settings",
-      "label": "Settings",
+      "id": "src_tauri_src_desktop_scan_mail_blocking",
+      "label": "scan_mail_blocking()",
       "degree": 18
     },
     {
-      "id": "src_tauri_src_desktop_scan_mail_blocking",
-      "label": "scan_mail_blocking()",
+      "id": "src_tauri_src_desktop_settings",
+      "label": "Settings",
       "degree": 18
     },
     {
@@ -551,11 +551,6 @@
       "degree": 13
     },
     {
-      "id": "tsconfig_compileroptions",
-      "label": "compilerOptions",
-      "degree": 12
-    },
-    {
       "id": "src_tauri_src_desktop_json_path",
       "label": "json_path()",
       "degree": 12
@@ -563,6 +558,11 @@
     {
       "id": "src_tauri_src_desktop_load_rules",
       "label": "load_rules()",
+      "degree": 12
+    },
+    {
+      "id": "tsconfig_compileroptions",
+      "label": "compilerOptions",
       "degree": 12
     },
     {
@@ -576,8 +576,8 @@
       "degree": 10
     },
     {
-      "id": "package_scripts",
-      "label": "scripts",
+      "id": "src_tauri_src_desktop_authorize_oauth",
+      "label": "authorize_oauth()",
       "degree": 10
     }
   ],
