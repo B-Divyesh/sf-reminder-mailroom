@@ -94,12 +94,32 @@ test("service worker removes a previous build cache during update", async ({ pag
 });
 
 test("@claim:oauth-provider-setup exposes Google and Microsoft OAuth connection", async ({ page }) => {
+  await page.addInitScript(() => {
+    const calls: Array<{ command: string; args: Record<string, unknown> }> = [];
+    (window as unknown as { __oauthCalls: typeof calls }).__oauthCalls = calls;
+    (window as unknown as { __TAURI_INTERNALS__: { invoke: (command: string, args: Record<string, unknown>) => Promise<unknown> } }).__TAURI_INTERNALS__ = {
+      invoke: async (command, args) => {
+        calls.push({ command, args });
+        if (command === "get_snapshot") return { settings: null, rules: [], audit: [], archivedCount: 0, duplicateCount: 0 };
+        if (command === "authorize_oauth") return "Google OAuth connected. The refresh token is stored in your operating system keychain.";
+        throw new Error(`Unexpected command: ${command}`);
+      }
+    };
+  });
   await page.goto("http://127.0.0.1:4174");
   await page.locator("#auth-mode").selectOption("oauth");
   await expect(page.locator("#oauth-provider")).toBeVisible();
   await expect(page.locator("#oauth-provider option")).toHaveText(["Google", "Microsoft"]);
   await expect(page.getByRole("button", { name: "Connect with OAuth" })).toBeVisible();
   await expect(page.locator("#oauth-client-id")).toBeVisible();
+  await page.locator("#oauth-client-id").fill("fixture-desktop-client-id");
+  await page.locator("#imap-user").fill("owner@example.com");
+  await page.locator("#smtp-user").fill("owner@example.com");
+  await page.locator("#archive-address").fill("archive@example.com");
+  await page.getByRole("button", { name: "Connect with OAuth" }).click();
+  await expect(page.locator("#settings-status")).toHaveText("Google OAuth connected. The refresh token is stored in your operating system keychain.");
+  const oauthCall = await page.evaluate(() => (window as unknown as { __oauthCalls: Array<{ command: string; args: { settings?: Record<string, unknown> } }> }).__oauthCalls.find((call) => call.command === "authorize_oauth"));
+  expect(oauthCall?.args.settings).toMatchObject({ authMode: "oauth", oauthProvider: "google", oauthClientId: "fixture-desktop-client-id", imapHost: "imap.gmail.com", smtpHost: "smtp.gmail.com" });
 });
 
 test("@claim:paid-tier-copy states the exact one-time price and billing destination", async ({ page }) => {
