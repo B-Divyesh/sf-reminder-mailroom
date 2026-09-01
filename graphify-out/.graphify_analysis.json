@@ -572,11 +572,6 @@
       "degree": 13
     },
     {
-      "id": "tsconfig_compileroptions",
-      "label": "compilerOptions",
-      "degree": 12
-    },
-    {
       "id": "src_tauri_src_desktop_json_path",
       "label": "json_path()",
       "degree": 12
@@ -587,13 +582,18 @@
       "degree": 12
     },
     {
-      "id": "package_scripts",
-      "label": "scripts",
-      "degree": 11
+      "id": "tsconfig_compileroptions",
+      "label": "compilerOptions",
+      "degree": 12
     },
     {
       "id": "src_tauri_src_desktop_candidate",
       "label": "Candidate",
+      "degree": 11
+    },
+    {
+      "id": "package_scripts",
+      "label": "scripts",
       "degree": 11
     },
     {
