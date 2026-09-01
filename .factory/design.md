@@ -51,7 +51,7 @@ Motion is sparse and physical: 180 ms cubic-bezier(.2,.7,.2,1) for tray selectio
 - Landing hero: an original still-life of a porcelain mail-sorting tray with multiple translucent reminder envelopes held behind one crisp invoice crossing a cobalt archive slot. It explains deduplication without showing a fake product UI.
 - Interface icons: original inline SVG strokes authored in-repository; no icon library.
 - App mark: an authored SVG combining an envelope flap with a single archive slot.
-- Installed-app walkthrough: three original Playwright captures of this app's own first-run, rules, and activity screens, stored as `public/assets/app-*-walkthrough.png`. They are product UI documentation, not stock imagery.
+- Installed-app walkthrough: three original Playwright captures of this app's own first-run, rules, and activity screens, stored as `public/assets/app-*-walkthrough.png`. They are product UI documentation, not stock imagery. They were recaptured on 1 September 2026 with `npm run capture:walkthroughs`; that script loads the bundled Northstar sample and waits for the 180 ms view transition to finish before each frame.
 
 ### Hero prompt sheet
 

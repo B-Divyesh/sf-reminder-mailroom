@@ -1,0 +1,14 @@
+{
+  "url": "https://reminder-mailroom.sociobot.in/",
+  "loadMs": 757,
+  "errors": [],
+  "a11y": {
+    "title": "Reminder Mailroom — archive each invoice once",
+    "lang": "en",
+    "h1": 1,
+    "main": true,
+    "imgsMissingAlt": 0,
+    "buttonsUnlabeled": 0,
+    "textLength": 3392
+  }
+}

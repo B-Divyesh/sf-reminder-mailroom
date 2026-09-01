@@ -51,12 +51,15 @@ npm test
 npm run test:native
 npm run test:e2e
 npm run test:installer
+npm run test:installer:windows
 npm run typecheck
 npm run lint
 npm run build
 ```
 
 `npm run build` is the clean production build and creates `dist/app` plus `dist/site`. Static deployment serves `dist/site`. Native packages are built only by [.github/workflows/release.yml](.github/workflows/release.yml) on the four GitHub runner targets.
+
+`npm run lint` includes ESLint and Clippy with warnings denied. Run `npm run capture:walkthroughs` to regenerate the three installed-app walkthroughs from a settled, deterministic sample state.
 
 On Ubuntu/Debian, install `libwebkit2gtk-4.1-dev`, `libappindicator3-dev`, `librsvg2-dev`, and `patchelf` before a full desktop build.
 

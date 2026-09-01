@@ -1,108 +1,88 @@
-# Reminder Mailroom handoff
-
-## Independent verification 4 outcome — FAIL
-
-Candidate `805eb72ac52906c4191dc5707d03cc5a902a4951` was independently checked on 1 September 2026 against <https://reminder-mailroom.sociobot.in/>.
-
-The free desktop product, sample demo, all 23 claim commands, all repository quality gates, release packages, live deployment parity, accessibility, privacy boundary, offline behavior, and performance checks pass. The candidate is not ready as the complete paid product because the one-time purchase flow is unavailable: the live page has no purchase link, and the product-specific checkout route returns HTTP 404. This conflicts with the researched one-time monetization requirement and the paid-unlock contract.
-
-Fresh headline evidence:
-
-- Detached clean worktree: exact candidate SHA and empty `git status`.
-- Claims: 23/23 exact commands passed.
-- Quality gates: `npm test`, `npm run test:native`, `npm run test:e2e`, both installer checks, typecheck, lint, Rust formatting, and `npm run build` passed.
-- Live browser: 87/87 independent checks passed across desktop/mobile and light/dark modes; a separate desktop-webview exercise passed 20/20 checks.
-- Lighthouse mobile: 98 Performance, 100 Accessibility, 100 Best Practices, 100 SEO; LCP 1.4 s, CLS 0.
-- Deployment: all 28 served files match the clean production build byte-for-byte.
-- Release: the downloaded v0.3.0 Debian package matches SHA-256 `a9be293c5e571ec1d76163b7121b8d8c66dad4ad4b2e1d4461851c3a0715cc46` and launches in an isolated Linux smoke check.
-- License API allowance: 30 successful invalid-license responses; request 31 returned 429 with `Retry-After: 4`.
-- Additional findings: missing social-card metadata on non-landing routes; faded walkthrough captures; two non-blocking Rust `needless_borrow` lint warnings.
-
-Full evidence and required next steps are in [`.factory/verification-4.md`](verification-4.md). No product code was modified during verification.
-
-## Builder repair record
+# Reminder Mailroom repair 4 handoff
 
 ## Outcome
 
-Release-blocking findings from verifier report `5af4c694507001968c8acd9e5422133d05fd60a2` are repaired in version 0.3.0. The Tauri 2 desktop-app and static-site deployment classes are unchanged. The researched brief and visual thesis are unchanged.
+All product-owned findings in verifier report commit `7f67e2d493d86bb67057ec9b63fab455a9774cd2` for candidate `805eb72ac52906c4191dc5707d03cc5a902a4951` are repaired. The Tauri 2 desktop artifact and static-site deployment classes are unchanged.
 
-The shared checkout remains operator-gated. Product pages now state that checkout is being enabled and contain no dead checkout link. Existing license restore and verification remain available. No shared billing, database, key-vault, DNS, or unrelated service resource was read or changed.
+The repair was committed as `40d0421` and pushed to `origin/main`. `dist/site` was deployed to the existing `sf-reminder-mailroom` Static Web App. No shared app, database, key vault, DNS, billing configuration, or unrelated resource was read or changed.
 
-## Repairs
+The controller explicitly excluded the operator-gated checkout 404. The landing site and desktop app still show **Checkout is being enabled** as a disabled status, contain no checkout URL, and keep existing license restore available.
 
-- Mail candidates are sorted by ascending IMAP UID before any decision. A chained reminder can no longer win because its RFC thread key sorts before the original.
-- Dry-run previews keep an in-memory set of canonical thread IDs, aliases, and PDF hashes. Later messages in the same preview are now skipped without writing SQLite records.
-- Duplicate messages add their RFC aliases to the saved canonical. A later reply linked only through an intermediate reminder still resolves to the original.
-- Mailbox scans use read-only `EXAMINE`, server-side subject plus sender matching, and `UID BODY.PEEK[]`. They do not request flag mutations.
-- Passwords and OAuth tokens now pass through an explicit operating-system credential-store boundary. Rules remain JSON; hashes and audit entries remain SQLite in the app data directory.
-- The release workflow runs the full native suite on Linux, embeds the source commit in the desktop UI, publishes it in `latest.json`, requires all six packages, and generates `SHA256SUMS`.
-- Privacy, safety, purchase, release-integrity, license-cache, and installer promises now have one exact `@claim:` regression each. `.factory/claims.json` contains 23 claims and 23 unique tags.
-- Landing, demo, legal, and desktop controls are at least 44 CSS px at 390 px. Essential mobile copy is at least 16 px; the mobile body is 17 px.
-- The unsupported future-update promise and dead checkout action were removed. Purchase copy now matches the operator-gated state.
+## Reproduction before repair
 
-## Reproduction and regression evidence
+The exact failures were reproduced before product code changed:
 
-The two controller-required failures were added before their fixes and reproduced against the verifier candidate:
+- A route-metadata regression expected description, canonical, Open Graph, and Twitter fields. `/demo/`, `/privacy/`, and `/terms/` returned no Open Graph or Twitter fields. The 404 also lacked description and canonical metadata.
+- A walkthrough regression measured readable dark-pixel coverage in the app-content crop. The old setup capture measured `0.023291`, below the `0.03` floor; the rules and activity frames were visibly captured during the 180 ms opacity transition.
+- `npm run lint` invoked Clippy with `-D warnings` and failed on the two reported `needless_borrow` diagnostics at `src-tauri/src/desktop.rs:794`.
 
-- chained chronology: expected the original PDF first but received the final reminder first;
-- same-scan dry run: expected `preview, skipped` but received `preview, preview`.
+## Repairs and regression coverage
 
-The fixed regressions are `claim_oldest_canonical_chained_reminders_keep_mailbox_chronology` and `claim_stateful_dry_run_models_earlier_decisions_in_the_same_scan` in `src-tauri/src/desktop.rs`. The chronology test uses reversed fetch order and adversarial `In-Reply-To`/`References`, then proves the original hash wins and both reminders skip. The dry-run test proves one preview, one skip, and zero canonical or audit writes.
+- Added route-specific canonical, Open Graph, and Twitter metadata to demo, Privacy, Terms, and the designed 404. All use the existing original 1200 × 630 product social card.
+- Replaced all three walkthroughs with real 1280 × 800 app captures. Rules and activity now show the bundled Northstar sample instead of an empty or transparent transition frame.
+- Added `npm run capture:walkthroughs`. The deterministic Playwright capture waits for opacity, transform, and active animations to settle before writing each frame.
+- Added Playwright coverage for the complete metadata matrix on all four non-landing pages and for dimensions plus readable content coverage in every walkthrough asset.
+- Removed the redundant Rust borrows. `npm run lint` now includes `cargo clippy --all-targets --all-features -- -D warnings`, so the warning cannot return unnoticed.
+- Recorded the capture method and provenance in `.factory/design.md` and the developer commands in `README.md`.
 
-## Local verification
+Live walkthrough crop ratios are `0.041033` (setup), `0.043789` (rules), and `0.053511` (activity), all above the regression floor.
 
-Executed after a clean `npm ci`:
+## Clean local verification
+
+The following ran after a clean `npm ci`:
 
 ```sh
 npm test
 npm run test:native
+npm run test:e2e
+npm run test:installer
+npm run test:installer:windows
 npm run typecheck
 npm run lint
 cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
-npm run test:installer
-npm run test:e2e
 npm run build
 ```
 
 Results:
 
-- Vitest: 7 passed.
-- Reduced Rust core: 3 passed.
-- Full native Rust: 15 passed.
-- Playwright: 19 passed.
-- POSIX installer consumer check: passed on Linux; the equivalent PowerShell fixture runs in the Windows release job.
-- All 22 locally applicable claim commands passed independently. The Windows-only claim is enforced by the Windows release runner.
-- TypeScript, ESLint, Rust formatting, JSON validation, and `git diff --check`: passed.
-- Production build: `dist/app` and `dist/site` created. Largest initial site JS is 3.85 KB raw / 1.72 KB gzip; CSS is 17.22 KB raw / 4.44 KB gzip. The mobile hero is 14.89 KB.
-- Local production `verify-url.sh`: landing and demo returned 200 with no console errors, one `h1`, `lang=en`, a main landmark, complete image alt attributes, and labeled buttons.
-- Standalone axe-core CLI 4.10.3: 0 violations on landing and demo. Playwright axe also found no serious or critical violations across desktop, 390 px, light, and dark flows.
-- Mobile Lighthouse: Performance 99, Accessibility 100, Best Practices 100, SEO 100; LCP 1.7 s, CLS 0, total blocking time 0 ms.
-- Keyboard focus/skip link, dialog focus trap and return, 200% text, reduced motion, offline reload, service-worker cache update, request privacy, and 390 px touch targets all passed in Playwright.
+- Clean install: 167 packages, 0 vulnerabilities.
+- Vitest: 7 passed; reduced Rust core: 3 passed; full native Rust: 15 passed.
+- Playwright: 21 passed at desktop and 390 px, including keyboard, focus, dialog, 200% text, light/dark, privacy, offline reload, and service-worker update checks.
+- Claims: all 23 commands passed independently; all 23 `@claim:` tags occur exactly once.
+- POSIX and PowerShell installer consumer fixtures passed.
+- TypeScript, ESLint, strict Clippy, Rust formatting, and `git diff --check` passed. Clippy reports no product warnings.
+- Production build created `dist/app` and `dist/site`. Initial site JavaScript is at most 3.85 KB raw / 1.72 KB gzip; CSS is at most 17.22 KB raw / 4.44 KB gzip. Loaded font files remain 92.08 KB, and the mobile hero is 14.89 KB.
+- `verify-url.sh` passed landing, demo, Privacy, Terms, and 404 locally: HTTP 200 for direct artifacts, one `h1`, `lang=en`, a main landmark, complete alt text, labeled buttons, and no console errors.
+- Standalone axe-core 4.10.3 found 0 violations on all five local pages.
+- Local mobile Lighthouse: Performance 99, Accessibility 100, Best Practices 100, SEO 100; FCP/LCP 1.7 s, total blocking time 0 ms, CLS 0.
+- The SWA 2.0.10 emulator confirmed the `/demo` redirect, designed 404 rewrite, 30-second HTML/service-worker revalidation, one-year immutable asset caching, and the configured CSP, permissions, referrer, MIME, and frame policies.
 
-Local browser evidence is in `.factory/evidence/repair-3/local/`.
+Local browser evidence is under `.factory/evidence/repair-4/local/`.
 
-## Release and deployment evidence
+## Deployment and live verification
 
-Source candidate `214603375c4f3c76bf9ee0b38db72df84144f522` was pushed to `main` and tagged with the lightweight `v0.3.0` tag. Both resolve to the same commit.
+SWA CLI 2.0.10 deployed `dist/site` to production using only the exact `sf-reminder-mailroom` resource. The generated endpoint was `https://gray-cliff-0e617dd10.7.azurestaticapps.net`; the public identity remains <https://reminder-mailroom.sociobot.in/>.
 
-GitHub Actions run [33548846280](https://github.com/B-Divyesh/sf-reminder-mailroom/actions/runs/33548846280) completed successfully on Linux, Windows, macOS Intel, and macOS Apple silicon. The release target is the candidate SHA. Nine assets are published: two `.dmg` files, `.msi`, `.exe`, `.AppImage`, `.deb`, `.rpm`, `SHA256SUMS`, and `latest.json`. The manifest contains all six platform entries and `sourceCommit: 214603375c4f3c76bf9ee0b38db72df84144f522`.
+- `/`, `/demo/`, `/privacy/`, and `/terms/` return 200. An unknown route returns the designed page with HTTP 404. `robots.txt`, `sitemap.xml`, `sw.js`, and both installer scripts return 200.
+- Live landing, demo, Privacy, and Terms HTML hashes match `dist/site` byte-for-byte. The live 404 hash is `7c4eeef265d18454a22a572db99cdf56b55a5c62055812281a7dc51ed55f6182`, also identical to the build.
+- Live walkthrough hashes match the build: setup `a25ffe8fa84dab6f8cbd390535a83bc8fe8f554bd5885158446d3bb668a7759e`, rules `927c31a892e0ce1008ac195c0acd44d0eda7f41f58b177b08aec94f63e756957`, activity `0b350c796c355f24a5fc2f141be66ebe79aba55da86df305dbbdea55fbdb87ff`.
+- Route-specific metadata passed on demo, Privacy, Terms, and a real 404 response. The landing and all normal routes had 0 console errors; the unavailable checkout remained a disabled status with zero checkout links.
+- `verify-url.sh` passed all four live 200 routes. Standalone axe-core found 0 violations across landing, demo, Privacy, Terms, and the live 404.
+- A fresh live demo archived one invoice, skipped two reminders, made same-origin requests only, and reloaded successfully offline.
+- Live responses include CSP, HSTS, Permissions-Policy, Referrer-Policy, `nosniff`, and frame denial. HTML and `sw.js` revalidate after 30 seconds; walkthrough assets use one-year immutable caching.
+- Live mobile Lighthouse: 100 Performance, 100 Accessibility, 100 Best Practices, 100 SEO; FCP/LCP 1.4 s, total blocking time 0 ms, CLS 0, 120 KiB transfer.
+- All crawled live internal and GitHub download links returned 200 or the expected GitHub 302 download response.
 
-The published `Reminder.Mailroom_0.3.0_amd64.deb` reports package version 0.3.0 and architecture amd64. Its downloaded SHA-256 is `a9be293c5e571ec1d76163b7121b8d8c66dad4ad4b2e1d4461851c3a0715cc46`, exactly matching the published checksum. Release evidence is in `.factory/evidence/repair-3/release/`.
+Live browser evidence is under `.factory/evidence/repair-4/live/`.
 
-`dist/site` was uploaded only to the existing `sf-reminder-mailroom` Static Web App with SWA CLI 2.0.10. No DNS or shared resource was touched. The live `index.html` SHA-256 is `0ad73cad18454350a62e9a68e39e62c58130613c0aa793cb0c321ec64fd9ef94`, exactly matching `dist/site/index.html`; demo, Privacy, Terms, service worker, and both installer scripts also match byte-for-byte.
+## Release package verification
 
-Live checks after publication:
+The desktop behavior and package inputs did not change; the Rust edit removes redundant references only. The existing v0.3.0 release remains the current package release and contains AppImage, DEB, RPM, MSI, EXE, Intel and Apple silicon DMGs, `SHA256SUMS`, and `latest.json`.
 
-- `/`, `/demo/`, `/privacy/`, `/terms/`, `robots.txt`, `sitemap.xml`, and both installer scripts return 200; the designed missing route returns 404.
-- The detected Linux action links directly to the v0.3.0 AppImage and reports that checksums are published.
-- `verify-url.sh` reports no console errors on landing or demo, with correct title, language, single `h1`, main landmark, alt attributes, and button names.
-- Live standalone axe-core reports 0 violations on landing and demo.
-- HTML revalidates at 30 seconds; hashed assets use one-year immutable caching. CSP, HSTS, permissions policy, referrer policy, MIME sniffing protection, and frame denial are present.
+The downloaded Debian consumer artifact reports package `reminder-mailroom`, version `0.3.0`, architecture `amd64`. Its SHA-256 is `a9be293c5e571ec1d76163b7121b8d8c66dad4ad4b2e1d4461851c3a0715cc46`, matching the published checksum.
 
-Live evidence is in `.factory/evidence/repair-3/live/`.
+## Known external gaps
 
-## Known gaps and operator action
-
-- Enable/register the shared `reminder-mailroom` checkout route in the Sociobot billing engine, then verify the hosted return flow. This work order explicitly forbids changing that shared resource.
-- Provide Apple and Windows signing credentials if signed packages are required. The workflow intentionally publishes unsigned builds until certificates are supplied (`APPLE_CERTIFICATE`, `WINDOWS_CERT_PFX`, plus their passwords if the signing action is enabled).
-- `imap-proto 0.10.2` emits an upstream future-incompatibility warning. Current tests and builds pass.
+- New checkout remains operator-gated. Per controller direction, this repair did not query or modify the checkout service and did not add a dead purchase action.
+- macOS and Windows packages remain unsigned until the operator supplies signing credentials.
+- `imap-proto 0.10.2` still emits Cargo's upstream future-incompatibility notice. Strict Clippy passes with no Reminder Mailroom warning.
