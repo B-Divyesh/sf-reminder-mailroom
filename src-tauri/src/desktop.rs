@@ -11,7 +11,7 @@ use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeSet, HashSet},
     fs,
     io::{Read, Write},
     net::{TcpListener, TcpStream},
@@ -24,6 +24,7 @@ use tauri::{AppHandle, Manager};
 
 const KEYRING_SERVICE: &str = "in.sociobot.reminder-mailroom";
 const SEARCH_LIMIT: usize = 500;
+const IMAP_FETCH_ITEMS: &str = "UID BODY.PEEK[]";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -63,6 +64,21 @@ struct OAuthResponse {
 fn default_expires_in() -> i64 { 3600 }
 
 struct XOAuth2 { username: String, access_token: String }
+
+trait SecretStore {
+    fn save(&self, account: &str, secret: &str) -> Result<(), String>;
+}
+
+struct OperatingSystemCredentialManager;
+
+impl SecretStore for OperatingSystemCredentialManager {
+    fn save(&self, account: &str, secret: &str) -> Result<(), String> {
+        keyring::Entry::new(KEYRING_SERVICE, account)
+            .map_err(|error| format!("Could not open the operating system keychain: {error}"))?
+            .set_password(secret)
+            .map_err(|error| format!("Could not save the credential in the operating system keychain: {error}"))
+    }
+}
 
 impl imap::Authenticator for XOAuth2 {
     type Response = Vec<u8>;
@@ -116,19 +132,41 @@ pub struct ScanResult {
     duplicate_count: u64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct PdfAttachment {
     name: String,
     bytes: Vec<u8>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Candidate {
     subject: String,
     sender: String,
     thread_key: String,
     thread_aliases: Vec<String>,
     pdf: PdfAttachment,
+}
+
+#[derive(Default)]
+struct PreviewCanonicals {
+    thread_keys: HashSet<String>,
+    aliases: HashSet<String>,
+    pdf_hashes: HashSet<String>,
+}
+
+impl PreviewCanonicals {
+    fn contains(&self, candidate: &Candidate, hash: &str) -> bool {
+        self.thread_keys.contains(&candidate.thread_key)
+            || self.pdf_hashes.contains(hash)
+            || candidate.thread_aliases.iter().any(|alias| self.aliases.contains(alias))
+    }
+
+    fn remember(&mut self, candidate: &Candidate, hash: &str, canonical_thread: Option<&str>) {
+        self.thread_keys.insert(canonical_thread.unwrap_or(&candidate.thread_key).to_owned());
+        self.thread_keys.insert(candidate.thread_key.clone());
+        self.pdf_hashes.insert(hash.to_owned());
+        self.aliases.extend(candidate.thread_aliases.iter().cloned());
+    }
 }
 
 /// A single mailbox can be opened by a manual run and the automatic timer at
@@ -277,12 +315,7 @@ async fn save_settings(
 ) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
         validate_settings(&settings)?;
-        if !imap_password.is_empty() {
-            set_secret(&format!("imap:{}", settings.imap_username), &imap_password)?;
-        }
-        if !smtp_password.is_empty() {
-            set_secret(&format!("smtp:{}", settings.smtp_username), &smtp_password)?;
-        }
+        store_mailbox_secrets(&OperatingSystemCredentialManager, &settings, &imap_password, &smtp_password)?;
         write_json(&json_path(&app, "settings.json")?, &settings)
     })
     .await
@@ -423,8 +456,12 @@ fn oauth_endpoints(provider: &str) -> Result<(&'static str, &'static str, &'stat
 fn oauth_account(settings: &Settings) -> String { format!("oauth:{}:{}", settings.oauth_provider, settings.imap_username) }
 
 fn save_oauth_token(settings: &Settings, token: &OAuthToken) -> Result<(), String> {
+    save_oauth_token_with(&OperatingSystemCredentialManager, settings, token)
+}
+
+fn save_oauth_token_with(store: &impl SecretStore, settings: &Settings, token: &OAuthToken) -> Result<(), String> {
     let encoded = serde_json::to_string(token).map_err(|error| format!("Could not encode the OAuth token: {error}"))?;
-    set_secret(&oauth_account(settings), &encoded)
+    store.save(&oauth_account(settings), &encoded)
 }
 
 fn load_oauth_token(settings: &Settings) -> Result<OAuthToken, String> {
@@ -522,11 +559,14 @@ fn validate_rule(rule: &Rule) -> Result<(), String> {
     Ok(())
 }
 
-fn set_secret(account: &str, password: &str) -> Result<(), String> {
-    keyring::Entry::new(KEYRING_SERVICE, account)
-        .map_err(|error| format!("Could not open the operating system keychain: {error}"))?
-        .set_password(password)
-        .map_err(|error| format!("Could not save the app password in the operating system keychain: {error}"))
+fn store_mailbox_secrets(store: &impl SecretStore, settings: &Settings, imap_password: &str, smtp_password: &str) -> Result<(), String> {
+    if !imap_password.is_empty() {
+        store.save(&format!("imap:{}", settings.imap_username), imap_password)?;
+    }
+    if !smtp_password.is_empty() {
+        store.save(&format!("smtp:{}", settings.smtp_username), smtp_password)?;
+    }
+    Ok(())
 }
 
 fn supplied_or_saved(supplied: String, account: &str) -> Result<String, String> {
@@ -578,28 +618,31 @@ fn scan_mail_blocking(app: &AppHandle, dry_run: bool) -> Result<ScanResult, Stri
     let transport = if dry_run { None } else { Some(smtp_transport(&settings, &smtp_secret)?) };
     let connection = open_db(app)?;
     let mut previews = Vec::new();
+    let mut preview_canonicals = PreviewCanonicals::default();
 
     for rule in rules {
-        session.select(&rule.mailbox).map_err(|error| format!("Could not open mailbox “{}”: {error}", rule.mailbox))?;
+        session.examine(&rule.mailbox).map_err(|error| format!("Could not open mailbox “{}” read-only: {error}", rule.mailbox))?;
         let mut uids = BTreeSet::new();
-        for term in rule.subject_contains.split(',').map(str::trim).filter(|term| !term.is_empty()) {
-            let escaped = term.replace('\\', "\\\\").replace('"', "\\\"");
-            let found = session.uid_search(format!("SUBJECT \"{escaped}\""))
+        for query in imap_search_queries(&rule) {
+            let found = session.uid_search(query)
                 .map_err(|error| format!("Could not search mailbox “{}”: {error}", rule.mailbox))?;
             uids.extend(found);
         }
         let selected = select_recent_uids(uids);
         if selected.is_empty() { continue; }
         let sequence = selected.iter().map(u32::to_string).collect::<Vec<_>>().join(",");
-        let fetched = session.uid_fetch(sequence, "BODY.PEEK[]")
+        let fetched = session.uid_fetch(sequence, IMAP_FETCH_ITEMS)
             .map_err(|error| format!("Could not read matched messages in “{}”: {error}", rule.mailbox))?;
         let mut candidates = Vec::new();
         for message in fetched.iter() {
             let Some(body) = message.body() else { continue };
-            if let Some(candidate) = parse_candidate(body, &rule)? { candidates.push(candidate); }
+            let uid = message.uid.ok_or_else(|| format!("The mail server omitted a UID while reading “{}”. Run the sort again.", rule.mailbox))?;
+            if let Some(candidate) = parse_candidate(body, &rule)? { candidates.push((uid, candidate)); }
         }
-        candidates.sort_by(|left, right| left.thread_key.cmp(&right.thread_key));
-        for candidate in candidates { process_candidate(&connection, &settings, transport.as_ref(), candidate, dry_run, &mut previews)?; }
+        sort_candidates_for_scan(&mut candidates);
+        for (_, candidate) in candidates {
+            process_candidate(&connection, &settings, transport.as_ref(), candidate, dry_run, &mut previews, &mut preview_canonicals)?;
+        }
     }
     session.logout().map_err(|error| format!("Mail sort completed but IMAP logout failed: {error}"))?;
     let (archived_count, duplicate_count) = counts(&connection)?;
@@ -609,6 +652,26 @@ fn scan_mail_blocking(app: &AppHandle, dry_run: bool) -> Result<ScanResult, Stri
         load_audit(&connection, 200)?
     };
     Ok(ScanResult { entries, archived_count, duplicate_count })
+}
+
+fn sort_candidates_for_scan(candidates: &mut [(u32, Candidate)]) {
+    candidates.sort_by_key(|(uid, _)| *uid);
+}
+
+fn imap_search_queries(rule: &Rule) -> Vec<String> {
+    let sender = rule.sender_contains.trim();
+    rule.subject_contains.split(',').map(str::trim).filter(|term| !term.is_empty()).map(|term| {
+        let escaped_term = imap_quote(term);
+        if sender.is_empty() {
+            format!("SUBJECT \"{escaped_term}\"")
+        } else {
+            format!("SUBJECT \"{escaped_term}\" FROM \"{}\"", imap_quote(sender))
+        }
+    }).collect()
+}
+
+fn imap_quote(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
 fn select_recent_uids(uids: BTreeSet<u32>) -> Vec<u32> {
@@ -672,19 +735,27 @@ fn process_candidate(
     candidate: Candidate,
     dry_run: bool,
     previews: &mut Vec<AuditEntry>,
+    preview_canonicals: &mut PreviewCanonicals,
 ) -> Result<(), String> {
     let hash = hex::encode(Sha256::digest(&candidate.pdf.bytes));
     let existing = find_existing_canonical(connection, &candidate, &hash)?;
     if let Some((saved_thread, saved_hash)) = existing {
         if dry_run {
             previews.push(preview_entry(&candidate, &hash, "skipped", "Already archived; this reminder would be skipped."));
+            preview_canonicals.remember(&candidate, &saved_hash, Some(&saved_thread));
         } else {
+            store_aliases(connection, &candidate.thread_aliases, &saved_thread)?;
             insert_audit(connection, &candidate, &hash, "skipped", &format!("Matched an existing canonical thread ({}) or PDF hash ({}…).", saved_thread, &saved_hash[..12]))?;
         }
         return Ok(());
     }
     if dry_run {
-        previews.push(preview_entry(&candidate, &hash, "preview", "New canonical PDF; this would be forwarded once."));
+        if preview_canonicals.contains(&candidate, &hash) {
+            previews.push(preview_entry(&candidate, &hash, "skipped", "Matched an earlier canonical PDF in this preview; this reminder would be skipped."));
+        } else {
+            previews.push(preview_entry(&candidate, &hash, "preview", "New canonical PDF; this would be forwarded once."));
+        }
+        preview_canonicals.remember(&candidate, &hash, None);
         return Ok(());
     }
     let transport = transport.ok_or("SMTP transport was not prepared.")?;
@@ -719,12 +790,17 @@ fn store_canonical(connection: &Connection, candidate: &Candidate, hash: &str) -
     let transaction = connection.unchecked_transaction().map_err(|error| format!("Could not start the audit update: {error}"))?;
     transaction.execute("INSERT INTO canonicals(thread_key, pdf_hash, archived_at) VALUES (?1, ?2, ?3)", params![candidate.thread_key, hash, now])
         .map_err(|error| format!("The invoice was sent, but its deduplication record could not be saved: {error}"))?;
-    for alias in &candidate.thread_aliases {
-        transaction.execute("INSERT OR IGNORE INTO canonical_aliases(alias, thread_key) VALUES (?1, ?2)", params![alias, candidate.thread_key])
-            .map_err(|error| format!("The invoice was sent, but its thread aliases could not be saved: {error}"))?;
-    }
+    store_aliases(&transaction, &candidate.thread_aliases, &candidate.thread_key)?;
     insert_audit(&transaction, &candidate, &hash, "archived", "Forwarded the first PDF in this configured invoice thread.")?;
     transaction.commit().map_err(|error| format!("The invoice was sent, but the audit update could not be finished: {error}"))
+}
+
+fn store_aliases(connection: &Connection, aliases: &[String], canonical_thread: &str) -> Result<(), String> {
+    for alias in aliases {
+        connection.execute("INSERT OR IGNORE INTO canonical_aliases(alias, thread_key) VALUES (?1, ?2)", params![alias, canonical_thread])
+            .map_err(|error| format!("The invoice decision was made, but its thread aliases could not be saved: {error}"))?;
+    }
+    Ok(())
 }
 
 fn send_canonical(transport: &SmtpTransport, settings: &Settings, candidate: &Candidate, hash: &str) -> Result<(), String> {
@@ -812,6 +888,128 @@ mod tests {
         assert_eq!(original.thread_key, reply.thread_key);
         assert_ne!(Sha256::digest(&original.pdf.bytes), Sha256::digest(&reply.pdf.bytes));
         assert!(reply.thread_aliases.contains(&"original@example.com".into()));
+    }
+
+    #[test]
+    // @claim:oldest-canonical
+    fn claim_oldest_canonical_chained_reminders_keep_mailbox_chronology() {
+        let rule = Rule { id: "1".into(), name: "Invoices".into(), subject_contains: "invoice".into(), sender_contains: "client".into(), mailbox: "INBOX".into(), enabled: true };
+        let original = b"From: client@example.com\r\nSubject: Invoice #1042\r\nMessage-ID: <z-root@example.com>\r\nContent-Type: application/pdf\r\n\r\n%PDF-original\r\n";
+        let reminder = b"From: client@example.com\r\nSubject: Invoice #1042 reminder\r\nMessage-ID: <middle@example.com>\r\nIn-Reply-To: <z-root@example.com>\r\nContent-Type: application/pdf\r\n\r\n%PDF-reminder\r\n";
+        let final_reminder = b"From: client@example.com\r\nSubject: Invoice #1042 final reminder\r\nMessage-ID: <final@example.com>\r\nIn-Reply-To: <a-parent@example.com>\r\nReferences: <z-root@example.com> <middle@example.com>\r\nContent-Type: application/pdf\r\n\r\n%PDF-final\r\n";
+        let candidates = vec![original.as_slice(), reminder.as_slice(), final_reminder.as_slice()].into_iter()
+            .map(|raw| parse_candidate(raw, &rule).unwrap().unwrap())
+            .collect::<Vec<_>>();
+        let mut candidates = vec![(3, candidates[2].clone()), (1, candidates[0].clone()), (2, candidates[1].clone())];
+
+        sort_candidates_for_scan(&mut candidates);
+
+        assert_eq!(candidates[0].1.pdf.bytes, b"%PDF-original\r\n");
+        assert_eq!(candidates[1].1.pdf.bytes, b"%PDF-reminder\r\n");
+        assert_eq!(candidates[2].1.pdf.bytes, b"%PDF-final\r\n");
+    }
+
+    #[test]
+    // @claim:stateful-dry-run
+    fn claim_stateful_dry_run_models_earlier_decisions_in_the_same_scan() {
+        let connection = Connection::open_in_memory().unwrap();
+        connection.execute_batch("CREATE TABLE canonicals(thread_key TEXT PRIMARY KEY,pdf_hash TEXT NOT NULL UNIQUE,archived_at TEXT NOT NULL);CREATE TABLE canonical_aliases(alias TEXT PRIMARY KEY,thread_key TEXT NOT NULL);CREATE TABLE audit(id INTEGER PRIMARY KEY AUTOINCREMENT,occurred_at TEXT NOT NULL,subject TEXT NOT NULL,thread_key TEXT NOT NULL,pdf_hash TEXT NOT NULL,outcome TEXT NOT NULL,detail TEXT NOT NULL);").unwrap();
+        let settings = Settings { auth_mode: "password".into(), oauth_provider: String::new(), oauth_client_id: String::new(), imap_host: "imap.example.com".into(), imap_port: 993, imap_security: "tls".into(), imap_username: "owner@example.com".into(), smtp_host: "smtp.example.com".into(), smtp_port: 465, smtp_security: "tls".into(), smtp_username: "owner@example.com".into(), archive_address: "archive@example.com".into(), scan_interval_minutes: 15 };
+        let rule = Rule { id: "1".into(), name: "Invoices".into(), subject_contains: "invoice".into(), sender_contains: "client".into(), mailbox: "INBOX".into(), enabled: true };
+        let original = parse_candidate(b"From: client@example.com\r\nSubject: Invoice #1042\r\nMessage-ID: <original@example.com>\r\nContent-Type: application/pdf\r\n\r\n%PDF-original\r\n", &rule).unwrap().unwrap();
+        let reminder = parse_candidate(b"From: client@example.com\r\nSubject: Invoice #1042 reminder\r\nMessage-ID: <reminder@example.com>\r\nIn-Reply-To: <original@example.com>\r\nContent-Type: application/pdf\r\n\r\n%PDF-reminder\r\n", &rule).unwrap().unwrap();
+        let mut previews = Vec::new();
+        let mut preview_canonicals = PreviewCanonicals::default();
+
+        process_candidate(&connection, &settings, None, original, true, &mut previews, &mut preview_canonicals).unwrap();
+        process_candidate(&connection, &settings, None, reminder, true, &mut previews, &mut preview_canonicals).unwrap();
+
+        assert_eq!(previews.iter().map(|entry| entry.outcome.as_str()).collect::<Vec<_>>(), ["preview", "skipped"]);
+        assert_eq!(connection.query_row("SELECT COUNT(*) FROM canonicals", [], |row| row.get::<_, u64>(0)).unwrap(), 0);
+    }
+
+    #[test]
+    // @claim:mailbox-read-safety
+    fn claim_mailbox_read_plan_applies_the_complete_rule_without_mutating_source_mail() {
+        let rule = Rule { id: "1".into(), name: "Client invoices".into(), subject_contains: "invoice, INV-".into(), sender_contains: "billing@example.com".into(), mailbox: "Receivables".into(), enabled: true };
+        assert_eq!(imap_search_queries(&rule), [
+            "SUBJECT \"invoice\" FROM \"billing@example.com\"",
+            "SUBJECT \"INV-\" FROM \"billing@example.com\"",
+        ]);
+        assert_eq!(IMAP_FETCH_ITEMS, "UID BODY.PEEK[]");
+        assert!(!IMAP_FETCH_ITEMS.contains("FLAGS"));
+        assert!(parse_candidate(b"From: someone@example.com\r\nSubject: Invoice #1042\r\nContent-Type: application/pdf\r\n\r\n%PDF", &rule).unwrap().is_none());
+    }
+
+    #[test]
+    // @claim:credential-keychain
+    fn claim_passwords_and_oauth_tokens_use_the_credential_store_not_settings_json() {
+        use std::cell::RefCell;
+        struct RecordingStore(RefCell<Vec<(String, String)>>);
+        impl SecretStore for RecordingStore {
+            fn save(&self, account: &str, secret: &str) -> Result<(), String> {
+                self.0.borrow_mut().push((account.to_owned(), secret.to_owned()));
+                Ok(())
+            }
+        }
+        let settings = Settings { auth_mode: "oauth".into(), oauth_provider: "google".into(), oauth_client_id: "desktop-client".into(), imap_host: "imap.gmail.com".into(), imap_port: 993, imap_security: "tls".into(), imap_username: "owner@example.com".into(), smtp_host: "smtp.gmail.com".into(), smtp_port: 587, smtp_security: "starttls".into(), smtp_username: "owner@example.com".into(), archive_address: "archive@example.com".into(), scan_interval_minutes: 15 };
+        let token = OAuthToken { access_token: "access-secret".into(), refresh_token: "refresh-secret".into(), expires_at: 123 };
+        let store = RecordingStore(RefCell::new(Vec::new()));
+
+        store_mailbox_secrets(&store, &settings, "imap-secret", "smtp-secret").unwrap();
+        save_oauth_token_with(&store, &settings, &token).unwrap();
+
+        let saved = store.0.borrow();
+        assert_eq!(saved.iter().map(|(account, _)| account.as_str()).collect::<Vec<_>>(), [
+            "imap:owner@example.com",
+            "smtp:owner@example.com",
+            "oauth:google:owner@example.com",
+        ]);
+        let settings_json = serde_json::to_string(&settings).unwrap();
+        for secret in ["imap-secret", "smtp-secret", "access-secret", "refresh-secret"] {
+            assert!(!settings_json.contains(secret));
+        }
+    }
+
+    #[test]
+    // @claim:local-native-storage
+    fn claim_rules_hashes_and_audit_are_written_to_local_files() {
+        let folder = std::env::temp_dir().join(format!("reminder-mailroom-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&folder).unwrap();
+        let rules_path = folder.join("rules.json");
+        let database_path = folder.join("audit.sqlite3");
+        let rules = vec![Rule { id: "one".into(), name: "Invoices".into(), subject_contains: "invoice".into(), sender_contains: "billing@example.com".into(), mailbox: "INBOX".into(), enabled: true }];
+        write_json(&rules_path, &rules).unwrap();
+        assert_eq!(read_json::<Vec<Rule>>(&rules_path).unwrap().unwrap()[0].name, "Invoices");
+
+        let connection = Connection::open(&database_path).unwrap();
+        connection.execute_batch("CREATE TABLE canonicals(thread_key TEXT PRIMARY KEY,pdf_hash TEXT NOT NULL UNIQUE,archived_at TEXT NOT NULL);CREATE TABLE canonical_aliases(alias TEXT PRIMARY KEY,thread_key TEXT NOT NULL);CREATE TABLE audit(id INTEGER PRIMARY KEY AUTOINCREMENT,occurred_at TEXT NOT NULL,subject TEXT NOT NULL,thread_key TEXT NOT NULL,pdf_hash TEXT NOT NULL,outcome TEXT NOT NULL,detail TEXT NOT NULL);").unwrap();
+        let candidate = Candidate { subject: "Invoice #1042".into(), sender: "billing@example.com".into(), thread_key: "root@example.com".into(), thread_aliases: vec!["root@example.com".into()], pdf: PdfAttachment { name: "invoice.pdf".into(), bytes: b"%PDF-local".to_vec() } };
+        let hash = hex::encode(Sha256::digest(&candidate.pdf.bytes));
+        store_canonical(&connection, &candidate, &hash).unwrap();
+        drop(connection);
+
+        let reopened = Connection::open(&database_path).unwrap();
+        assert_eq!(reopened.query_row("SELECT pdf_hash FROM canonicals", [], |row| row.get::<_, String>(0)).unwrap(), hash);
+        assert_eq!(reopened.query_row("SELECT outcome FROM audit", [], |row| row.get::<_, String>(0)).unwrap(), "archived");
+        drop(reopened);
+        fs::remove_dir_all(folder).unwrap();
+    }
+
+    #[test]
+    fn a_duplicate_message_adds_its_alias_for_the_next_chained_reply() {
+        let connection = Connection::open_in_memory().unwrap();
+        connection.execute_batch("CREATE TABLE canonicals(thread_key TEXT PRIMARY KEY,pdf_hash TEXT NOT NULL UNIQUE,archived_at TEXT NOT NULL);CREATE TABLE canonical_aliases(alias TEXT PRIMARY KEY,thread_key TEXT NOT NULL);CREATE TABLE audit(id INTEGER PRIMARY KEY AUTOINCREMENT,occurred_at TEXT NOT NULL,subject TEXT NOT NULL,thread_key TEXT NOT NULL,pdf_hash TEXT NOT NULL,outcome TEXT NOT NULL,detail TEXT NOT NULL);").unwrap();
+        let settings = Settings { auth_mode: "password".into(), oauth_provider: String::new(), oauth_client_id: String::new(), imap_host: "imap.example.com".into(), imap_port: 993, imap_security: "tls".into(), imap_username: "owner@example.com".into(), smtp_host: "smtp.example.com".into(), smtp_port: 465, smtp_security: "tls".into(), smtp_username: "owner@example.com".into(), archive_address: "archive@example.com".into(), scan_interval_minutes: 15 };
+        let rule = Rule { id: "1".into(), name: "Invoices".into(), subject_contains: "invoice".into(), sender_contains: "client".into(), mailbox: "INBOX".into(), enabled: true };
+        let original = parse_candidate(b"From: client@example.com\r\nSubject: Invoice\r\nMessage-ID: <root@example.com>\r\nContent-Type: application/pdf\r\n\r\n%PDF-one", &rule).unwrap().unwrap();
+        let middle = parse_candidate(b"From: client@example.com\r\nSubject: Invoice reminder\r\nMessage-ID: <middle@example.com>\r\nIn-Reply-To: <root@example.com>\r\nContent-Type: application/pdf\r\n\r\n%PDF-one", &rule).unwrap().unwrap();
+        let final_reply = parse_candidate(b"From: client@example.com\r\nSubject: Invoice final\r\nMessage-ID: <final@example.com>\r\nIn-Reply-To: <middle@example.com>\r\nContent-Type: application/pdf\r\n\r\n%PDF-changed", &rule).unwrap().unwrap();
+        let original_hash = hex::encode(Sha256::digest(&original.pdf.bytes));
+        store_canonical(&connection, &original, &original_hash).unwrap();
+        process_candidate(&connection, &settings, None, middle, false, &mut Vec::new(), &mut PreviewCanonicals::default()).unwrap();
+        let final_hash = hex::encode(Sha256::digest(&final_reply.pdf.bytes));
+        assert!(find_existing_canonical(&connection, &final_reply, &final_hash).unwrap().is_some());
     }
 
     #[test]
