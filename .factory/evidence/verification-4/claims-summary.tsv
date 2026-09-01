@@ -1,0 +1,23 @@
+release-platform-download	0	npm run test:e2e -- --grep @claim:release-platform-download
+changed-pdf-thread	0	npm run test:e2e -- --grep @claim:changed-pdf-thread
+demo-isolation	0	npm run test:e2e -- --grep @claim:demo-isolation
+audit-csv-export	0	npm run test:e2e -- --grep @claim:audit-csv-export
+local-interface-privacy	0	npm run test:e2e -- --grep @claim:local-interface-privacy
+offline-reload	0	npm run test:e2e -- --grep @claim:offline-reload
+oauth-provider-setup	0	npm run test:e2e -- --grep @claim:oauth-provider-setup
+paid-tier-copy	0	npm run test:e2e -- --grep @claim:paid-tier-copy
+paid-license-lifecycle	0	npm run test:e2e -- --grep @claim:paid-license-lifecycle
+license-token-storage	0	npm run test:web -- -t @claim:license-token-storage
+license-verdict-cache	0	npm run test:web -- -t @claim:license-verdict-cache
+thread-identity	0	cargo test --manifest-path src-tauri/Cargo.toml claim_thread_identity
+concurrent-scan-safety	0	cargo test --manifest-path src-tauri/Cargo.toml claim_concurrent_scan_gate
+desktop-sample-project	0	npm run test:e2e -- --grep @claim:desktop-sample-project
+installer-checksum	0	npm run test:installer
+windows-installer-checksum	0	npm run test:installer:windows
+release-integrity-files	0	npm run test:web -- -t @claim:release-integrity-files
+oldest-canonical	0	cargo test --manifest-path src-tauri/Cargo.toml claim_oldest_canonical
+stateful-dry-run	0	cargo test --manifest-path src-tauri/Cargo.toml claim_stateful_dry_run
+mailbox-read-safety	0	cargo test --manifest-path src-tauri/Cargo.toml claim_mailbox_read_plan
+credential-keychain	0	cargo test --manifest-path src-tauri/Cargo.toml claim_passwords_and_oauth_tokens
+local-native-storage	0	cargo test --manifest-path src-tauri/Cargo.toml claim_rules_hashes_and_audit
+website-request-privacy	0	npm run test:e2e -- --grep @claim:website-request-privacy

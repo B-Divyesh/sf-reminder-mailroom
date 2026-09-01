@@ -1,4 +1,26 @@
-# Reminder Mailroom repair handoff
+# Reminder Mailroom handoff
+
+## Independent verification 4 outcome — FAIL
+
+Candidate `805eb72ac52906c4191dc5707d03cc5a902a4951` was independently checked on 1 September 2026 against <https://reminder-mailroom.sociobot.in/>.
+
+The free desktop product, sample demo, all 23 claim commands, all repository quality gates, release packages, live deployment parity, accessibility, privacy boundary, offline behavior, and performance checks pass. The candidate is not ready as the complete paid product because the one-time purchase flow is unavailable: the live page has no purchase link, and the product-specific checkout route returns HTTP 404. This conflicts with the researched one-time monetization requirement and the paid-unlock contract.
+
+Fresh headline evidence:
+
+- Detached clean worktree: exact candidate SHA and empty `git status`.
+- Claims: 23/23 exact commands passed.
+- Quality gates: `npm test`, `npm run test:native`, `npm run test:e2e`, both installer checks, typecheck, lint, Rust formatting, and `npm run build` passed.
+- Live browser: 87/87 independent checks passed across desktop/mobile and light/dark modes; a separate desktop-webview exercise passed 20/20 checks.
+- Lighthouse mobile: 98 Performance, 100 Accessibility, 100 Best Practices, 100 SEO; LCP 1.4 s, CLS 0.
+- Deployment: all 28 served files match the clean production build byte-for-byte.
+- Release: the downloaded v0.3.0 Debian package matches SHA-256 `a9be293c5e571ec1d76163b7121b8d8c66dad4ad4b2e1d4461851c3a0715cc46` and launches in an isolated Linux smoke check.
+- License API allowance: 30 successful invalid-license responses; request 31 returned 429 with `Retry-After: 4`.
+- Additional findings: missing social-card metadata on non-landing routes; faded walkthrough captures; two non-blocking Rust `needless_borrow` lint warnings.
+
+Full evidence and required next steps are in [`.factory/verification-4.md`](verification-4.md). No product code was modified during verification.
+
+## Builder repair record
 
 ## Outcome
 

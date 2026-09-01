@@ -1,0 +1,9 @@
+npm-test	0	npm test
+native-test	0	npm run test:native
+e2e-test	0	npm run test:e2e
+installer-posix	0	npm run test:installer
+installer-windows	0	npm run test:installer:windows
+typecheck	0	npm run typecheck
+lint	0	npm run lint
+rust-format	0	cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+production-build	0	npm run build
