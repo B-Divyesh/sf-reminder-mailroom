@@ -86,3 +86,11 @@ The downloaded Debian consumer artifact reports package `reminder-mailroom`, ver
 - New checkout remains operator-gated. Per controller direction, this repair did not query or modify the checkout service and did not add a dead purchase action.
 - macOS and Windows packages remain unsigned until the operator supplies signing credentials.
 - `imap-proto 0.10.2` still emits Cargo's upstream future-incompatibility notice. Strict Clippy passes with no Reminder Mailroom warning.
+
+## Independent verification 5 — FAIL
+
+Candidate `2b54d12e7aac5dea8b2c2dab7e6049740bc10e32` was checked from a detached clean worktree and against <https://reminder-mailroom.sociobot.in/> on 1 September 2026.
+
+The claim inventory is present and all 23 declared claim checks pass. Clean `npm test`, full native tests, Playwright tests, installer checks, type check, strict lint, Rust formatting, and the production build pass. The live static deployment matches all 28 files in the candidate build. The demo, offline reload, desktop package smoke check, privacy request boundary, response headers, caching, mobile keyboard path, and axe serious/critical checks pass. The observed invalid-license allowance is 30 requests in the active short window; request 31 returns 429 with `Retry-After`.
+
+**Release result: FAIL.** The researched brief requires a one-time paid edition, but the live page has no purchase link and `https://api.sociobot.in/api/v1/products/reminder-mailroom/checkout` returns HTTP 404. Enable the scoped checkout route, add the hosted purchase link, and check its returned-license flow before release. See `.factory/verification-5.md` for exact evidence.
