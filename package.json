@@ -9,6 +9,7 @@
     "build": "npm run build:app && npm run build:site",
     "build:app": "vite build --config vite.app.config.ts",
     "build:site": "vite build --config vite.site.config.ts",
+    "capture:walkthroughs": "npm run build:app && node scripts/capture-walkthroughs.mjs",
     "test": "vitest run && cargo test --manifest-path src-tauri/Cargo.toml --no-default-features",
     "test:native": "cargo test --manifest-path src-tauri/Cargo.toml",
     "test:web": "vitest run",
@@ -16,7 +17,8 @@
     "test:installer": "sh tests/install.sh",
     "test:installer:windows": "pwsh -File tests/install.ps1",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint app site tests *.ts",
+    "lint": "eslint app site tests *.ts && npm run lint:native",
+    "lint:native": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
     "tauri": "tauri"
   },
   "dependencies": {

@@ -14,6 +14,98 @@ test("landing page has one plain heading, working legal routes, and no console e
   expect(errors).toEqual([]);
 });
 
+test("every public route exposes a complete route-specific social card", async ({ page }) => {
+  const routes = [
+    {
+      path: "/demo/",
+      canonical: "https://reminder-mailroom.sociobot.in/demo/",
+      title: "Try the sample — Reminder Mailroom",
+      description: "Try Reminder Mailroom with an isolated sample invoice thread.",
+    },
+    {
+      path: "/privacy/",
+      canonical: "https://reminder-mailroom.sociobot.in/privacy/",
+      title: "Privacy — Reminder Mailroom",
+      description: "How Reminder Mailroom keeps mail content and settings on your device.",
+    },
+    {
+      path: "/terms/",
+      canonical: "https://reminder-mailroom.sociobot.in/terms/",
+      title: "Terms — Reminder Mailroom",
+      description: "Terms for the free and paid editions of Reminder Mailroom.",
+    },
+    {
+      path: "/404.html",
+      canonical: "https://reminder-mailroom.sociobot.in/404.html",
+      title: "Page not found — Reminder Mailroom",
+      description: "This address does not lead to a Reminder Mailroom page.",
+    },
+  ];
+
+  for (const route of routes) {
+    await page.goto(route.path);
+    const metadata = await page.evaluate(() => ({
+      description: document.querySelector<HTMLMetaElement>('meta[name="description"]')?.content,
+      canonical: document.querySelector<HTMLLinkElement>('link[rel="canonical"]')?.href,
+      ogType: document.querySelector<HTMLMetaElement>('meta[property="og:type"]')?.content,
+      ogTitle: document.querySelector<HTMLMetaElement>('meta[property="og:title"]')?.content,
+      ogDescription: document.querySelector<HTMLMetaElement>('meta[property="og:description"]')?.content,
+      ogImage: document.querySelector<HTMLMetaElement>('meta[property="og:image"]')?.content,
+      ogUrl: document.querySelector<HTMLMetaElement>('meta[property="og:url"]')?.content,
+      twitterCard: document.querySelector<HTMLMetaElement>('meta[name="twitter:card"]')?.content,
+      twitterTitle: document.querySelector<HTMLMetaElement>('meta[name="twitter:title"]')?.content,
+      twitterDescription: document.querySelector<HTMLMetaElement>('meta[name="twitter:description"]')?.content,
+      twitterImage: document.querySelector<HTMLMetaElement>('meta[name="twitter:image"]')?.content,
+    }));
+
+    expect(metadata).toEqual({
+      description: route.description,
+      canonical: route.canonical,
+      ogType: "website",
+      ogTitle: route.title,
+      ogDescription: route.description,
+      ogImage: "https://reminder-mailroom.sociobot.in/social-card.webp",
+      ogUrl: route.canonical,
+      twitterCard: "summary_large_image",
+      twitterTitle: route.title,
+      twitterDescription: route.description,
+      twitterImage: "https://reminder-mailroom.sociobot.in/social-card.webp",
+    });
+  }
+});
+
+test("walkthrough captures show settled app content", async ({ page }) => {
+  await page.goto("/");
+  const captures = await page.locator(".walkthrough-frames img").evaluateAll(async (images) => Promise.all(images.map(async (node) => {
+    const image = node as HTMLImageElement;
+    await image.decode();
+    const canvas = document.createElement("canvas");
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    const context = canvas.getContext("2d", { willReadFrequently: true })!;
+    context.drawImage(image, 0, 0);
+    const crop = context.getImageData(300, 280, 900, 500).data;
+    let darkPixels = 0;
+    for (let offset = 0; offset < crop.length; offset += 4) {
+      const luminance = 0.2126 * crop[offset] + 0.7152 * crop[offset + 1] + 0.0722 * crop[offset + 2];
+      if (luminance < 190) darkPixels += 1;
+    }
+    return {
+      source: new URL(image.src).pathname,
+      width: image.naturalWidth,
+      height: image.naturalHeight,
+      darkPixelRatio: darkPixels / (crop.length / 4),
+    };
+  })));
+
+  expect(captures).toHaveLength(3);
+  for (const capture of captures) {
+    expect(capture.width, capture.source).toBe(1280);
+    expect(capture.height, capture.source).toBe(800);
+    expect(capture.darkPixelRatio, `${capture.source} contains readable settled content`).toBeGreaterThanOrEqual(0.03);
+  }
+});
+
 test("@claim:release-platform-download selects a real asset from GitHub API metadata", async ({ page }) => {
   const requests: string[] = [];
   page.on("request", (request) => requests.push(request.url()));

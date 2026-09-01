@@ -791,7 +791,7 @@ fn store_canonical(connection: &Connection, candidate: &Candidate, hash: &str) -
     transaction.execute("INSERT INTO canonicals(thread_key, pdf_hash, archived_at) VALUES (?1, ?2, ?3)", params![candidate.thread_key, hash, now])
         .map_err(|error| format!("The invoice was sent, but its deduplication record could not be saved: {error}"))?;
     store_aliases(&transaction, &candidate.thread_aliases, &candidate.thread_key)?;
-    insert_audit(&transaction, &candidate, &hash, "archived", "Forwarded the first PDF in this configured invoice thread.")?;
+    insert_audit(&transaction, candidate, hash, "archived", "Forwarded the first PDF in this configured invoice thread.")?;
     transaction.commit().map_err(|error| format!("The invoice was sent, but the audit update could not be finished: {error}"))
 }
 
