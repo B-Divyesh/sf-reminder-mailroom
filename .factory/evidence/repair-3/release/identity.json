@@ -1,0 +1,11 @@
+{
+  "version": "v0.3.0",
+  "sourceCommit": "214603375c4f3c76bf9ee0b38db72df84144f522",
+  "workflowRun": "https://github.com/B-Divyesh/sf-reminder-mailroom/actions/runs/33548846280",
+  "workflowConclusion": "success",
+  "release": "https://github.com/B-Divyesh/sf-reminder-mailroom/releases/tag/v0.3.0",
+  "verifiedAsset": "Reminder.Mailroom_0.3.0_amd64.deb",
+  "verifiedSha256": "a9be293c5e571ec1d76163b7121b8d8c66dad4ad4b2e1d4461851c3a0715cc46",
+  "liveIndexSha256": "0ad73cad18454350a62e9a68e39e62c58130613c0aa793cb0c321ec64fd9ef94",
+  "verifiedAt": "2026-09-01T19:31:00Z"
+}

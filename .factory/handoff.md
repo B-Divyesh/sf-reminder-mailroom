@@ -61,7 +61,23 @@ Local browser evidence is in `.factory/evidence/repair-3/local/`.
 
 ## Release and deployment evidence
 
-Version 0.3.0 is ready for the `v0.3.0` tag. The release workflow will build unsigned `.dmg` packages for Apple silicon and Intel, Windows `.msi`/`.exe`, Linux `.AppImage`, `.deb`, and `.rpm`, then attach `SHA256SUMS` and source-bound `latest.json`. Exact release asset and live deployment evidence is appended after those jobs complete.
+Source candidate `214603375c4f3c76bf9ee0b38db72df84144f522` was pushed to `main` and tagged with the lightweight `v0.3.0` tag. Both resolve to the same commit.
+
+GitHub Actions run [33548846280](https://github.com/B-Divyesh/sf-reminder-mailroom/actions/runs/33548846280) completed successfully on Linux, Windows, macOS Intel, and macOS Apple silicon. The release target is the candidate SHA. Nine assets are published: two `.dmg` files, `.msi`, `.exe`, `.AppImage`, `.deb`, `.rpm`, `SHA256SUMS`, and `latest.json`. The manifest contains all six platform entries and `sourceCommit: 214603375c4f3c76bf9ee0b38db72df84144f522`.
+
+The published `Reminder.Mailroom_0.3.0_amd64.deb` reports package version 0.3.0 and architecture amd64. Its downloaded SHA-256 is `a9be293c5e571ec1d76163b7121b8d8c66dad4ad4b2e1d4461851c3a0715cc46`, exactly matching the published checksum. Release evidence is in `.factory/evidence/repair-3/release/`.
+
+`dist/site` was uploaded only to the existing `sf-reminder-mailroom` Static Web App with SWA CLI 2.0.10. No DNS or shared resource was touched. The live `index.html` SHA-256 is `0ad73cad18454350a62e9a68e39e62c58130613c0aa793cb0c321ec64fd9ef94`, exactly matching `dist/site/index.html`; demo, Privacy, Terms, service worker, and both installer scripts also match byte-for-byte.
+
+Live checks after publication:
+
+- `/`, `/demo/`, `/privacy/`, `/terms/`, `robots.txt`, `sitemap.xml`, and both installer scripts return 200; the designed missing route returns 404.
+- The detected Linux action links directly to the v0.3.0 AppImage and reports that checksums are published.
+- `verify-url.sh` reports no console errors on landing or demo, with correct title, language, single `h1`, main landmark, alt attributes, and button names.
+- Live standalone axe-core reports 0 violations on landing and demo.
+- HTML revalidates at 30 seconds; hashed assets use one-year immutable caching. CSP, HSTS, permissions policy, referrer policy, MIME sniffing protection, and frame denial are present.
+
+Live evidence is in `.factory/evidence/repair-3/live/`.
 
 ## Known gaps and operator action
 
