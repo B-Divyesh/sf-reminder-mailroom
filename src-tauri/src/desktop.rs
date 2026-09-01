@@ -901,12 +901,22 @@ mod tests {
             .map(|raw| parse_candidate(raw, &rule).unwrap().unwrap())
             .collect::<Vec<_>>();
         let mut candidates = vec![(3, candidates[2].clone()), (1, candidates[0].clone()), (2, candidates[1].clone())];
+        let connection = Connection::open_in_memory().unwrap();
+        connection.execute_batch("CREATE TABLE canonicals(thread_key TEXT PRIMARY KEY,pdf_hash TEXT NOT NULL UNIQUE,archived_at TEXT NOT NULL);CREATE TABLE canonical_aliases(alias TEXT PRIMARY KEY,thread_key TEXT NOT NULL);CREATE TABLE audit(id INTEGER PRIMARY KEY AUTOINCREMENT,occurred_at TEXT NOT NULL,subject TEXT NOT NULL,thread_key TEXT NOT NULL,pdf_hash TEXT NOT NULL,outcome TEXT NOT NULL,detail TEXT NOT NULL);").unwrap();
+        let settings = Settings { auth_mode: "password".into(), oauth_provider: String::new(), oauth_client_id: String::new(), imap_host: "imap.example.com".into(), imap_port: 993, imap_security: "tls".into(), imap_username: "owner@example.com".into(), smtp_host: "smtp.example.com".into(), smtp_port: 465, smtp_security: "tls".into(), smtp_username: "owner@example.com".into(), archive_address: "archive@example.com".into(), scan_interval_minutes: 15 };
 
         sort_candidates_for_scan(&mut candidates);
 
         assert_eq!(candidates[0].1.pdf.bytes, b"%PDF-original\r\n");
         assert_eq!(candidates[1].1.pdf.bytes, b"%PDF-reminder\r\n");
         assert_eq!(candidates[2].1.pdf.bytes, b"%PDF-final\r\n");
+        let mut previews = Vec::new();
+        let mut preview_canonicals = PreviewCanonicals::default();
+        for (_, candidate) in candidates {
+            process_candidate(&connection, &settings, None, candidate, true, &mut previews, &mut preview_canonicals).unwrap();
+        }
+        assert_eq!(previews.iter().map(|entry| entry.outcome.as_str()).collect::<Vec<_>>(), ["preview", "skipped", "skipped"]);
+        assert_eq!(previews[0].pdf_hash, hex::encode(Sha256::digest(b"%PDF-original\r\n")));
     }
 
     #[test]
@@ -926,6 +936,7 @@ mod tests {
 
         assert_eq!(previews.iter().map(|entry| entry.outcome.as_str()).collect::<Vec<_>>(), ["preview", "skipped"]);
         assert_eq!(connection.query_row("SELECT COUNT(*) FROM canonicals", [], |row| row.get::<_, u64>(0)).unwrap(), 0);
+        assert_eq!(connection.query_row("SELECT COUNT(*) FROM audit", [], |row| row.get::<_, u64>(0)).unwrap(), 0);
     }
 
     #[test]

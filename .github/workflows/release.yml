@@ -8,7 +8,7 @@ on:
       version:
         description: "Release tag"
         required: true
-        default: "v0.2.0"
+        default: "v0.3.0"
 
 permissions:
   contents: write
@@ -47,6 +47,9 @@ jobs:
       - run: npm ci
       - name: Test deterministic core
         run: npm test
+      - name: Test native mail processing
+        if: matrix.platform == 'linux'
+        run: npm run test:native
       - name: Execute published installer checks
         if: matrix.platform == 'linux' || matrix.platform == 'macos-x64'
         run: sh tests/install.sh
@@ -56,6 +59,8 @@ jobs:
         run: ./tests/install.ps1
       - name: Build Tauri bundles
         uses: tauri-apps/tauri-action@v0
+        env:
+          VITE_BUILD_SHA: ${{ github.sha }}
         with:
           args: --target ${{ matrix.target }}
       - name: Collect bundles
@@ -86,11 +91,12 @@ jobs:
           path: release-assets
           merge-multiple: true
       - name: Create checksums and download manifest
-        run: node scripts/release-manifest.mjs release-assets "${{ github.repository }}" "$RELEASE_TAG"
+        run: node scripts/release-manifest.mjs release-assets "${{ github.repository }}" "$RELEASE_TAG" "${{ github.sha }}"
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ github.sha }}
           name: Reminder Mailroom ${{ env.RELEASE_TAG }}
           generate_release_notes: true
           files: release-assets/*

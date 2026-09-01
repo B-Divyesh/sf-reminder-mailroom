@@ -50,10 +50,31 @@
   },
   {
     "id": "paid-tier-copy",
-    "claim": "Mailroom Plus costs $29 once and adds unlimited rules and checks while the app is open.",
+    "claim": "Mailroom Plus is listed at $29 once, and the unavailable checkout is shown honestly without a dead purchase link.",
     "where": "landing pricing, desktop Plus view, terms, README",
     "test": "npm run test:e2e -- --grep @claim:paid-tier-copy",
-    "sandbox": "fresh browser context; assert exact price, included feature, and Sociobot checkout URL"
+    "sandbox": "fresh browser context; assert exact price, included feature, operator-gated checkout state, and absence of a checkout href"
+  },
+  {
+    "id": "paid-license-lifecycle",
+    "claim": "A valid license enables extra rules and timed checks; a revoked license turns paid features off.",
+    "where": "desktop Plus view, terms",
+    "test": "npm run test:e2e -- --grep @claim:paid-license-lifecycle",
+    "sandbox": "fresh desktop webview fixture; recorded valid and revoked verification responses; assert paid controls, 15-minute timer, request URLs, and relock"
+  },
+  {
+    "id": "license-token-storage",
+    "claim": "A returned license token is stored locally and removed from the visible URL.",
+    "where": "desktop Plus view and privacy page",
+    "test": "npm run test:web -- -t @claim:license-token-storage",
+    "sandbox": "isolated URL and recording browser-storage fixture; assert token storage and removal of the license query parameter"
+  },
+  {
+    "id": "license-verdict-cache",
+    "claim": "A valid license verdict is reused for no more than one day.",
+    "where": "privacy page",
+    "test": "npm run test:web -- -t @claim:license-verdict-cache",
+    "sandbox": "deterministic browser-storage fixture and clock; assert valid verdict before expiry and cache miss after one day"
   },
   {
     "id": "thread-identity",
@@ -82,5 +103,61 @@
     "where": "landing download panel and README",
     "test": "npm run test:installer",
     "sandbox": "isolated local curl fixture; execute the published POSIX script and assert only the checksum-matched asset is installed"
+  },
+  {
+    "id": "windows-installer-checksum",
+    "claim": "The Windows install script checks SHA-256 before starting a release installer.",
+    "where": "landing download panel and README",
+    "test": "npm run test:installer:windows",
+    "sandbox": "isolated PowerShell web fixture; execute the published Windows script and assert only the checksum-matched installer is started"
+  },
+  {
+    "id": "release-integrity-files",
+    "claim": "Every release publishes SHA256SUMS and source-commit metadata for all six platform packages.",
+    "where": "landing download panel and README",
+    "test": "npm run test:web -- -t @claim:release-integrity-files",
+    "sandbox": "temporary six-package release fixture; run the production manifest generator; verify each checksum and exact source commit"
+  },
+  {
+    "id": "oldest-canonical",
+    "claim": "The oldest matching PDF wins even when chained reply headers sort differently from mailbox UIDs.",
+    "where": "desktop sorting rules, landing how-it-works, README",
+    "test": "cargo test --manifest-path src-tauri/Cargo.toml claim_oldest_canonical",
+    "sandbox": "three deterministic MIME messages with reversed fetch order and adversarial In-Reply-To plus References values"
+  },
+  {
+    "id": "stateful-dry-run",
+    "claim": "A preview models earlier decisions in the same scan without writing canonical records.",
+    "where": "desktop activity, landing how-it-works",
+    "test": "cargo test --manifest-path src-tauri/Cargo.toml claim_stateful_dry_run",
+    "sandbox": "fresh in-memory SQLite database; two linked new messages; assert one preview, one skip, and zero persisted canonicals"
+  },
+  {
+    "id": "mailbox-read-safety",
+    "claim": "Mailroom applies the full subject and sender rule before fetching content and uses read-only IMAP access without marking messages read.",
+    "where": "desktop rules and activity, privacy page, README",
+    "test": "cargo test --manifest-path src-tauri/Cargo.toml claim_mailbox_read_plan",
+    "sandbox": "deterministic rule and MIME fixtures; assert combined server search, UID BODY.PEEK fetch, and rejection of a wrong sender"
+  },
+  {
+    "id": "credential-keychain",
+    "claim": "Passwords and OAuth tokens are routed to the operating-system credential store and excluded from settings JSON.",
+    "where": "desktop mailbox setup, privacy page, README",
+    "test": "cargo test --manifest-path src-tauri/Cargo.toml claim_passwords_and_oauth_tokens",
+    "sandbox": "recording credential-store boundary with password and OAuth fixtures; serialize settings and assert no secret appears"
+  },
+  {
+    "id": "local-native-storage",
+    "claim": "Sorting rules, PDF hashes, and audit entries are stored in local JSON and SQLite files.",
+    "where": "landing privacy section, privacy page, README",
+    "test": "cargo test --manifest-path src-tauri/Cargo.toml claim_rules_hashes_and_audit",
+    "sandbox": "fresh temporary directory; write and reopen a rule JSON file and SQLite canonical/audit records"
+  },
+  {
+    "id": "website-request-privacy",
+    "claim": "The product website sends no tracking or visitor data; its only external page request is public GitHub release metadata.",
+    "where": "landing privacy section, privacy page, README",
+    "test": "npm run test:e2e -- --grep @claim:website-request-privacy",
+    "sandbox": "fresh browser context with recorded requests and deterministic GitHub response; assert the sole external request and no analytics endpoint"
   }
 ]

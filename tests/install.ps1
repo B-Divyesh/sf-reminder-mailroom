@@ -1,4 +1,5 @@
 $ErrorActionPreference = "Stop"
+# @claim:windows-installer-checksum
 $payload = [Text.Encoding]::UTF8.GetBytes("verified-reminder-mailroom")
 $expected = ([Security.Cryptography.SHA256]::Create().ComputeHash($payload) | ForEach-Object { $_.ToString("x2") }) -join ""
 $script:started = $false

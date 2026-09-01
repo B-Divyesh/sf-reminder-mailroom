@@ -17,14 +17,14 @@ describe("invoice identity", () => {
 });
 
 describe("license privacy and caching", () => {
-  it("stores a returned token and strips it from the working URL", () => {
+  it("@claim:license-token-storage stores a returned token and strips it from the working URL", () => {
     const values = new Map<string, string>();
     const url = new URL("https://reminder-mailroom.sociobot.in/?license=secret-token&source=checkout");
     expect(consumeLicenseFromUrl(url, { setItem: (key, value) => values.set(key, value) })).toBe("secret-token");
     expect(url.searchParams.has("license")).toBe(false);
   });
 
-  it("uses valid verdicts for at most one day", () => {
+  it("@claim:license-verdict-cache uses valid verdicts for at most one day", () => {
     const now = 2 * DAY_MS;
     const storage = { getItem: (key: string) => key === LICENSE_CACHE_KEY ? JSON.stringify({ valid: true, reason: "ok", checkedAt: now - 1000 }) : null };
     expect(cachedLicense(storage, now)?.valid).toBe(true);

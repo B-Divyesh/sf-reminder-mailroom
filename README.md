@@ -39,7 +39,7 @@ curl -fsSL https://reminder-mailroom.sociobot.in/install.sh | sh
 irm https://reminder-mailroom.sociobot.in/install.ps1 | iex
 ```
 
-Packages are open source and currently unsigned. macOS and Windows may show a first-open warning. Each GitHub Release includes `SHA256SUMS` and `latest.json`. The install scripts verify SHA-256 before installing.
+Packages are open source and currently unsigned. macOS and Windows may show a first-open warning. Each GitHub Release includes `SHA256SUMS`. Its `latest.json` records the exact source commit and six package URLs. The install scripts verify SHA-256 before installing.
 
 ## Develop and verify
 
@@ -48,9 +48,11 @@ Use Node 22+, Rust stable, and the Tauri 2 system libraries for your OS.
 ```sh
 npm ci
 npm test
+npm run test:native
 npm run test:e2e
 npm run test:installer
-npx tsc --noEmit
+npm run typecheck
+npm run lint
 npm run build
 ```
 
@@ -60,7 +62,7 @@ On Ubuntu/Debian, install `libwebkit2gtk-4.1-dev`, `libappindicator3-dev`, `libr
 
 ## Purchase
 
-The free edition includes one rule, manual processing, and audit CSV export. Mailroom Plus costs US $29 once. It adds unlimited rules, checks while the app is open, and v1 updates. Checkout and license verification use the Sociobot billing API. Sociobot/Dodo is the merchant of record.
+The free edition includes one rule, manual processing, and audit CSV export. Mailroom Plus costs US $29 once. It adds unlimited rules and checks while the app is open. New checkout remains operator-gated until the product route is enabled. Existing license verification uses the Sociobot billing API.
 
 ## Repository map
 

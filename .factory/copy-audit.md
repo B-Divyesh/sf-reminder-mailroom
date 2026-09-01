@@ -1,6 +1,6 @@
 # Landing-page copy audit
 
-Audited 30 August 2026. Counts treat contractions and hyphenated terms as one word. Headings and controls are included where they form a complete phrase.
+Audited 1 September 2026. Counts treat contractions and hyphenated terms as one word. Headings and controls are included where they form a complete phrase.
 
 | Copy | Words | Result |
 | --- | ---: | --- |
@@ -48,12 +48,15 @@ Audited 30 August 2026. Counts treat contractions and hyphenated terms as one wo
 | Download for your operating system | 5 | Pass |
 | Choose a signed-by-source, currently unsigned build. | 6 | Pass |
 | macOS and Windows may show a first-open warning until operator signing is added. | 13 | Pass |
-| Every release includes SHA256SUMS. | 4 | Pass |
+| Every release includes SHA256SUMS and exact source metadata. | 8 | Pass |
 | Install scripts verify the download before installing. | 7 | Pass |
 | Use one rule free. | 4 | Pass |
 | Add more for $29. | 4 | Pass |
-| Sociobot/Dodo is the merchant of record. | 7 | Pass |
-| Refunds revoke the license automatically. | 5 | Pass |
+| Same local processing and full data export | 7 | Pass |
+| Checkout is being enabled | 4 | Pass |
+| Free downloads work now. | 4 | Pass |
+| Existing licenses can still be restored below. | 7 | Pass |
+| Local audit history and CSV export | 6 | Pass |
 | Made for independent businesses that prefer clean books and private tools. | 11 | Pass |
 | Hero artwork was generated for this product with the factory image model; no stock imagery or tracking scripts. | 18 | Pass |
 

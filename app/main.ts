@@ -13,6 +13,7 @@ type AuditEntry = { id: number; occurredAt: string; subject: string; threadKey: 
 type AppSnapshot = { settings: Settings | null; rules: Rule[]; audit: AuditEntry[]; archivedCount: number; duplicateCount: number };
 
 const isTauri = "__TAURI_INTERNALS__" in window;
+const buildSha = (import.meta.env.VITE_BUILD_SHA || "development").slice(0, 12);
 const defaultSettings: Settings = { authMode: "password", oauthProvider: "google", oauthClientId: "", imapHost: "", imapPort: 993, imapSecurity: "tls", imapUsername: "", smtpHost: "", smtpPort: 587, smtpSecurity: "starttls", smtpUsername: "", archiveAddress: "", scanIntervalMinutes: 60 };
 let snapshot: AppSnapshot = { settings: null, rules: [], audit: [], archivedCount: 0, duplicateCount: 0 };
 let paid = false;
@@ -37,7 +38,7 @@ document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
         ${navButton("activity", "Activity", icons.activity)}
         ${navButton("license", "Plus", icons.license)}
       </nav>
-      <div class="rail-note"><strong>Local by design</strong>Message content stays between this device and your mail servers.</div>
+      <div class="rail-note"><strong>Local by design</strong>Message content stays between this device and your mail servers.<span>v0.3.0 · build ${buildSha}</span></div>
     </aside>
     <main class="workspace" id="main" tabindex="-1">
       <div class="offline-banner" id="offline"><strong>You’re offline.</strong> Saved rules and activity are still available. Connect before testing or sorting mail.</div>
@@ -101,7 +102,7 @@ function activityView() {
 }
 
 function licenseView() {
-  return `<section class="view" data-section="license" aria-labelledby="license-heading"><h2 id="license-heading">A quiet tool, bought once</h2><p class="section-intro">One rule, manual previews, archiving, and complete audit export are free. Plus is for busy mailrooms that need more rules and automatic checks while the app is open.</p><div class="license-panel"><span class="badge" id="license-badge">Free</span><p class="price">$29 <small>one-time</small></p><ul class="feature-list"><li>Unlimited explicit sorting rules</li><li>Automatic checks every 15–240 minutes while open</li><li>Same local-only processing and full data export</li></ul><a class="button" id="buy-link" href="${BILLING_BASE}/products/${PRODUCT_SLUG}/checkout" target="_blank" rel="noreferrer">Buy Mailroom Plus</a><div class="license-restore"><div class="field"><label for="license-token">Have a license? Paste it here</label><input id="license-token" autocomplete="off" spellcheck="false"><span class="hint">The token is stored only on this device.</span></div><div class="actions"><button class="button secondary" id="restore-license">Verify license</button></div><p class="status-message" id="license-status" role="status"></p></div><p class="legal-note">Sociobot/Dodo is the merchant of record. Refunds are handled there and revoke the license. <a href="https://reminder-mailroom.sociobot.in/privacy" target="_blank">Privacy</a> · <a href="https://reminder-mailroom.sociobot.in/terms" target="_blank">Terms</a></p></div></section>`;
+  return `<section class="view" data-section="license" aria-labelledby="license-heading"><h2 id="license-heading">A quiet tool, bought once</h2><p class="section-intro">One rule, manual previews, archiving, and audit export are free. Plus is for busy mailrooms that need more rules and automatic checks while the app is open.</p><div class="license-panel"><span class="badge" id="license-badge">Free</span><p class="price">$29 <small>one-time</small></p><ul class="feature-list"><li>Unlimited explicit sorting rules</li><li>Automatic checks every 15–240 minutes while open</li><li>Same local processing and full data export</li></ul><span class="button unavailable" id="buy-link" aria-disabled="true">Checkout is being enabled</span><p class="checkout-note">Free downloads work now. New purchases resume after the product checkout is published.</p><div class="license-restore"><div class="field"><label for="license-token">Have a license? Paste it here</label><input id="license-token" autocomplete="off" spellcheck="false"><span class="hint">The token is stored only on this device.</span></div><div class="actions"><button class="button secondary" id="restore-license">Verify license</button></div><p class="status-message" id="license-status" role="status"></p></div><p class="legal-note">Sociobot/Dodo handles existing licenses and refunds. A revoked license turns off paid features. <a href="https://reminder-mailroom.sociobot.in/privacy" target="_blank">Privacy</a> · <a href="https://reminder-mailroom.sociobot.in/terms" target="_blank">Terms</a></p></div></section>`;
 }
 
 function field(id: string, label: string, placeholder: string, type: string, required: boolean, hint = "") {
@@ -169,7 +170,7 @@ function renderAudit() {
 function outcomeLabel(v: string) { return ({ archived: "Archived once", skipped: "Duplicate skipped", preview: "Preview match", error: "Needs attention" } as Record<string,string>)[v] ?? v; }
 
 function openRuleDialog(rule?: Rule) {
-  if (!paid && !rule && snapshot.rules.length >= 1) { switchView("license"); setStatus("#license-status", "The free mailroom includes one active rule. Plus unlocks unlimited rules."); return; }
+  if (!paid && !rule && snapshot.rules.length >= 1) { switchView("license"); setStatus("#license-status", "The free mailroom includes one active rule. Plus allows unlimited rules."); return; }
   lastFocused = document.activeElement as HTMLElement;
   $("#dialog-root").innerHTML = `<div class="dialog-backdrop" role="presentation"><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="rule-dialog-title"><h2 id="rule-dialog-title">${rule ? "Edit" : "Add"} sorting rule</h2><form id="rule-form"><div class="form-grid"><div class="field span-2"><label for="rule-name">Rule name</label><input id="rule-name" required value="${safe(rule?.name ?? "")}" placeholder="Client invoices"></div><div class="field span-2"><label for="rule-subject">Subject contains</label><input id="rule-subject" required value="${safe(rule?.subjectContains ?? "invoice")}" aria-describedby="subject-hint"><span class="hint" id="subject-hint">Comma-separated terms are alternatives. Matching ignores letter case.</span></div><div class="field"><label for="rule-sender">Sender contains <span class="hint">(optional)</span></label><input id="rule-sender" value="${safe(rule?.senderContains ?? "")}" placeholder="billing@client.com"></div><div class="field"><label for="rule-mailbox">Mailbox</label><input id="rule-mailbox" required value="${safe(rule?.mailbox ?? "INBOX")}"></div><div class="field"><label><input id="rule-enabled" type="checkbox" ${rule?.enabled === false ? "" : "checked"}> Rule enabled</label></div></div><div class="actions"><button class="button" type="submit">Save rule</button><button class="button secondary" type="button" id="cancel-dialog">Cancel</button></div><p class="status-message" id="dialog-status" role="status"></p></form></div></div>`;
   const dialog = $(".dialog"); const first = $<HTMLInputElement>("#rule-name"); first.focus();
@@ -237,7 +238,7 @@ async function verifyLicense(token: string, force = false) {
 
 function applyLicense(valid: boolean, reason: string) {
   paid = valid;
-  $("#license-badge").textContent = valid ? "Plus unlocked" : "Free";
+  $("#license-badge").textContent = valid ? "Plus active" : "Free";
   $<HTMLElement>("#buy-link").hidden = valid;
   if (reason === "offline") setStatus("#license-status", valid ? "Offline — using your last valid license check." : "Connect to verify this license.");
   else if (valid) setStatus("#license-status", "Mailroom Plus is active on this device.", false, true);

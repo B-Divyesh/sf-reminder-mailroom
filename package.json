@@ -1,6 +1,6 @@
 {
   "name": "reminder-mailroom",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,9 +10,13 @@
     "build:app": "vite build --config vite.app.config.ts",
     "build:site": "vite build --config vite.site.config.ts",
     "test": "vitest run && cargo test --manifest-path src-tauri/Cargo.toml --no-default-features",
+    "test:native": "cargo test --manifest-path src-tauri/Cargo.toml",
     "test:web": "vitest run",
     "test:e2e": "playwright test",
     "test:installer": "sh tests/install.sh",
+    "test:installer:windows": "pwsh -File tests/install.ps1",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint app site tests *.ts",
     "tauri": "tauri"
   },
   "dependencies": {
@@ -23,11 +27,13 @@
   "devDependencies": {
     "@axe-core/playwright": "4.10.2",
     "@playwright/test": "1.58.2",
-    "@types/node": "^22.15.0",
     "@tauri-apps/cli": "^2.8.4",
-    "typescript": "^5.9.2",
-    "vite": "^7.1.3",
+    "@types/node": "^22.15.0",
+    "eslint": "^9.39.5",
     "playwright-core": "1.58.2",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.69.0",
+    "vite": "^7.1.3",
     "vitest": "^3.2.4"
   }
 }

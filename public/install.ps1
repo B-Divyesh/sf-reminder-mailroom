@@ -13,4 +13,4 @@ if ($temp.EndsWith(".msi")) {
 } else {
   Start-Process $temp -Wait
 }
-Write-Host "Reminder Mailroom installer finished. Windows may have shown a publisher warning because v0.1 is unsigned."
+Write-Host "Reminder Mailroom installer finished. Windows may have shown a publisher warning because this build is unsigned."

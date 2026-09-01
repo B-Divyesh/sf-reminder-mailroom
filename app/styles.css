@@ -30,7 +30,7 @@ button, input, select, a { -webkit-tap-highlight-color: transparent; }
 button { color: inherit; }
 a { color: var(--accent); text-underline-offset: .2em; }
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
-.skip-link { position: fixed; z-index: 20; top: 8px; left: 8px; padding: 10px 14px; color: #fff; background: #152d35; transform: translateY(-150%); }
+.skip-link { position: fixed; z-index: 20; top: 8px; left: 8px; min-height:44px; padding: 10px 14px; display:inline-flex; align-items:center; color: #fff; background: #152d35; transform: translateY(-150%); }
 .skip-link:focus { transform: translateY(0); }
 .app-shell { min-height: 100vh; display: grid; grid-template-columns: 248px minmax(0, 1fr); }
 .rail { position: sticky; top: 0; height: 100vh; padding: 28px 20px; display: flex; flex-direction: column; gap: 32px; border-right: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 82%, transparent); }
@@ -42,6 +42,7 @@ a { color: var(--accent); text-underline-offset: .2em; }
 .nav-button[aria-current="page"] { color: var(--text); background: var(--surface); box-shadow: inset 3px 0 var(--accent), var(--shadow); }
 .rail-note { margin-top: auto; padding: 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; line-height: 1.45; }
 .rail-note strong { display: block; color: var(--text); font-size: 15px; }
+.rail-note span { display:block; margin-top:8px; font-variant-numeric:tabular-nums; }
 .workspace { min-width: 0; padding: 48px clamp(24px, 5vw, 76px) 72px; }
 .topline { display: flex; justify-content: space-between; gap: 24px; align-items: start; margin-bottom: 48px; }
 .eyebrow { margin: 0 0 8px; color: var(--accent); font-size: 13px; font-weight: 750; letter-spacing: .11em; text-transform: uppercase; }
@@ -77,6 +78,7 @@ fieldset { margin: 28px 0; padding: 0; border: 0; }
 .button.quiet { border-color: transparent; background: transparent; color: var(--accent); }
 .button.danger { border-color: var(--danger); background: transparent; color: var(--danger); }
 .button[disabled] { opacity: .55; cursor: wait; }
+.button.unavailable { background:var(--line); color:var(--text); cursor:not-allowed; }
 .status-message { min-height: 24px; margin-top: 14px; color: var(--muted); }
 .status-message.error { color: var(--danger); }
 .status-message.success { color: var(--success); }
@@ -116,6 +118,8 @@ fieldset { margin: 28px 0; padding: 0; border: 0; }
 .license-restore { margin-top: 28px; padding-top: 22px; border-top: 1px solid var(--line); }
 .license-restore .field { max-width: 540px; }
 .legal-note { color: var(--muted); font-size: 14px; }
+.legal-note a { min-height:44px; display:inline-flex; align-items:center; }
+.checkout-note { max-width:58ch; color:var(--muted); }
 .dialog-backdrop { position: fixed; z-index: 10; inset: 0; padding: 24px; display: grid; place-items: center; background: rgb(10 29 34 / .58); }
 .dialog { width: min(560px, 100%); max-height: calc(100vh - 48px); overflow: auto; padding: 28px; border: 0; border-radius: 6px 24px 24px 6px; background: var(--surface); color: var(--text); box-shadow: 0 24px 90px rgb(0 0 0 / .25); }
 .dialog h2 { font-size: 28px; }
@@ -129,10 +133,11 @@ fieldset { margin: 28px 0; padding: 0; border: 0; }
 }
 
 @media (max-width: 760px) {
+  body { font-size:17px; }
   .app-shell { display: block; }
   .rail { position: static; width: auto; height: auto; padding: 16px 18px 0; gap: 14px; border-right: 0; border-bottom: 1px solid var(--line); }
   .rail nav { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding-bottom: 12px; }
-  .nav-button { width: 100%; min-width: 0; padding-inline: 5px; justify-content: center; border-radius: 8px; font-size: 14px; white-space: nowrap; }
+  .nav-button { width: 100%; min-width: 0; padding-inline: 5px; justify-content: center; border-radius: 8px; font-size: 16px; white-space: nowrap; }
   .nav-button svg { display: none; }
   .nav-button[aria-current="page"] { box-shadow: inset 0 -3px var(--accent); }
   .rail-note { display: none; }
@@ -147,6 +152,7 @@ fieldset { margin: 28px 0; padding: 0; border: 0; }
   .audit-row .audit-subject { grid-column: 1 / -1; grid-row: 1; }
   .rule-card { grid-template-columns: 1fr; }
   .rule-actions { justify-self: end; }
+  .sample-project p,.privacy-strip p,.rule-card .meta,.hint,.audit-row,.legal-note,.badge,.rail-note,.rail-note strong { font-size:16px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

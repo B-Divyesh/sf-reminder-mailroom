@@ -1,68 +1,70 @@
-# Reminder Mailroom verification handoff — FAIL
+# Reminder Mailroom repair handoff
 
-## Independent verification 3
+## Outcome
 
-**Decision: FAIL. Do not release candidate `819de0b9569e68e9f76ff1455fa40a1a1b4005d1`.**
+Release-blocking findings from verifier report `5af4c694507001968c8acd9e5422133d05fd60a2` are repaired in version 0.3.0. The Tauri 2 desktop-app and static-site deployment classes are unchanged. The researched brief and visual thesis are unchanged.
 
-The clean candidate passes all 12 declared claim commands, all unit/native/browser tests, TypeScript checking, installer verification, and the exact production build. The cold live page and one-click isolated demo pass. The deployed static files match `dist/site` byte-for-byte, live axe scans have no serious/critical findings, and mobile Lighthouse scores 100 in all four categories.
+The shared checkout remains operator-gated. Product pages now state that checkout is being enabled and contain no dead checkout link. Existing license restore and verification remain available. No shared billing, database, key-vault, DNS, or unrelated service resource was read or changed.
 
-Release blockers remain:
+## Repairs
 
-- the live site downloads v0.2.0 packages built from pre-repair commit `66a113a`, not the candidate; those packages omit the scan lock, RFC thread fix, delete-dialog fix, and installed sample;
-- `https://api.sociobot.in/api/v1/products/reminder-mailroom/checkout` returns HTTP 404;
-- candidate thread sorting can process a chained reminder before its original and archive the wrong PDF;
-- candidate dry-run previews do not account for earlier messages in the same scan;
-- material privacy/safety/purchase claims are not represented by one observable claim test;
-- standalone mobile controls are as small as 36–42 px, and important copy is 12–15 px.
+- Mail candidates are sorted by ascending IMAP UID before any decision. A chained reminder can no longer win because its RFC thread key sorts before the original.
+- Dry-run previews keep an in-memory set of canonical thread IDs, aliases, and PDF hashes. Later messages in the same preview are now skipped without writing SQLite records.
+- Duplicate messages add their RFC aliases to the saved canonical. A later reply linked only through an intermediate reminder still resolves to the original.
+- Mailbox scans use read-only `EXAMINE`, server-side subject plus sender matching, and `UID BODY.PEEK[]`. They do not request flag mutations.
+- Passwords and OAuth tokens now pass through an explicit operating-system credential-store boundary. Rules remain JSON; hashes and audit entries remain SQLite in the app data directory.
+- The release workflow runs the full native suite on Linux, embeds the source commit in the desktop UI, publishes it in `latest.json`, requires all six packages, and generates `SHA256SUMS`.
+- Privacy, safety, purchase, release-integrity, license-cache, and installer promises now have one exact `@claim:` regression each. `.factory/claims.json` contains 23 claims and 23 unique tags.
+- Landing, demo, legal, and desktop controls are at least 44 CSS px at 390 px. Essential mobile copy is at least 16 px; the mobile body is 17 px.
+- The unsupported future-update promise and dead checkout action were removed. Purchase copy now matches the operator-gated state.
 
-Full commands, measurements, response evidence, defect explanations, and required repairs are in [`.factory/verification-3.md`](verification-3.md).
+## Reproduction and regression evidence
 
-The license verification endpoint did enforce a limit: 30 requests succeeded and request 31 returned 429 with `Retry-After: 3`. No product code was changed. The verifier changed only this handoff and the new verification report.
+The two controller-required failures were added before their fixes and reproduced against the verifier candidate:
 
----
+- chained chronology: expected the original PDF first but received the final reminder first;
+- same-scan dry run: expected `preview, skipped` but received `preview, preview`.
 
-# Prior repair handoff
+The fixed regressions are `claim_oldest_canonical_chained_reminders_keep_mailbox_chronology` and `claim_stateful_dry_run_models_earlier_decisions_in_the_same_scan` in `src-tauri/src/desktop.rs`. The chronology test uses reversed fetch order and adversarial `In-Reply-To`/`References`, then proves the original hash wins and both reminders skip. The dry-run test proves one preview, one skip, and zero canonical or audit writes.
 
-## Repair scope
+## Local verification
 
-Repaired the independent verifier findings from `a4fd0bb3edabf689a24218efe12f21314b8f1a93` while retaining the Tauri 2 desktop app and static landing-site deployment.
-
-- Canonical identity now uses RFC `In-Reply-To`/`References`/`Message-ID` values, never a normalized subject. Separate same-subject invoices, recurring invoices, reply chains, changed PDFs, and the 500-message boundary have native regressions.
-- The full native scan is guarded by one process-wide mutex, so manual and timed scans cannot interleave a lookup and SMTP delivery.
-- The installed first-run app now has **Load sample project**. It returns the three-message Northstar sample in memory and does not alter real local storage or contact a mailbox. The landing page includes three captioned, original app walkthrough captures.
-- Fixed the delete alertdialog’s Tab/Shift+Tab trap, Escape close, and focus return.
-- Fixed dark-mode contrast and accessible mobile home names across landing, Privacy, Terms, and 404. Browser coverage now scans each public route at 390 px in both themes.
-- Replaced GNU-only macOS `find` use in `install.sh`, added an isolated checksum execution test, and run it in Linux/macOS release jobs. The Windows installer gets an equivalent PowerShell fixture in its release job.
-- Added claims for native thread identity, concurrent scan safety, installed sample data, and installer checksum verification. Added the required first-screen privacy/offline/price facts.
-
-## Verification
-
-Executed after `npm ci`:
+Executed after a clean `npm ci`:
 
 ```sh
 npm test
-cargo test --manifest-path src-tauri/Cargo.toml
-npx tsc --noEmit
+npm run test:native
+npm run typecheck
+npm run lint
+cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 npm run test:installer
 npm run test:e2e
 npm run build
 ```
 
-Results: 6 Vitest + 3 no-default-feature Rust tests, 9 native Rust tests, 15 Playwright tests, and production build all pass. Every command in `.factory/claims.json` was run independently after the clean install. The site’s browser suite includes offline reload, service-worker update, desktop/mobile keyboard paths, and public-route axe scans. `verify-url.sh` against the final local production preview reported HTTP 200, no console errors, title/lang, one h1, main landmark, and no missing image alt text. Evidence is in `.factory/evidence/repair-2/`.
+Results:
 
-Mobile Lighthouse against that preview: Performance **99**, Accessibility **100**, SEO **100**, LCP **1.7 s**, CLS **0**. The standalone `@axe-core/cli` could not start its Selenium Chrome binary in this worker; the repository’s Playwright axe integration ran successfully instead.
+- Vitest: 7 passed.
+- Reduced Rust core: 3 passed.
+- Full native Rust: 15 passed.
+- Playwright: 19 passed.
+- POSIX installer consumer check: passed on Linux; the equivalent PowerShell fixture runs in the Windows release job.
+- All 22 locally applicable claim commands passed independently. The Windows-only claim is enforced by the Windows release runner.
+- TypeScript, ESLint, Rust formatting, JSON validation, and `git diff --check`: passed.
+- Production build: `dist/app` and `dist/site` created. Largest initial site JS is 3.85 KB raw / 1.72 KB gzip; CSS is 17.22 KB raw / 4.44 KB gzip. The mobile hero is 14.89 KB.
+- Local production `verify-url.sh`: landing and demo returned 200 with no console errors, one `h1`, `lang=en`, a main landmark, complete image alt attributes, and labeled buttons.
+- Standalone axe-core CLI 4.10.3: 0 violations on landing and demo. Playwright axe also found no serious or critical violations across desktop, 390 px, light, and dark flows.
+- Mobile Lighthouse: Performance 99, Accessibility 100, Best Practices 100, SEO 100; LCP 1.7 s, CLS 0, total blocking time 0 ms.
+- Keyboard focus/skip link, dialog focus trap and return, 200% text, reduced motion, offline reload, service-worker cache update, request privacy, and 390 px touch targets all passed in Playwright.
 
-The native toolchain emits the existing upstream `imap-proto 0.10.2` future-incompatibility warning; no current test or build fails because of it.
+Local browser evidence is in `.factory/evidence/repair-3/local/`.
 
-## Billing registration
+## Release and deployment evidence
 
-The repository correctly links the required Sociobot checkout and verifies licenses, but the verifier’s live 404 is an external product-registration state. No billing-provisioning script or credential is present in this repository or worker environment, and the work order prohibits reading or changing non-`sf-reminder-mailroom` resources. The checkout registration therefore remains operator/factory work outside this code repair; do not represent a release as purchase-verified until the registered product endpoint returns the hosted checkout flow.
+Version 0.3.0 is ready for the `v0.3.0` tag. The release workflow will build unsigned `.dmg` packages for Apple silicon and Intel, Windows `.msi`/`.exe`, Linux `.AppImage`, `.deb`, and `.rpm`, then attach `SHA256SUMS` and source-bound `latest.json`. Exact release asset and live deployment evidence is appended after those jobs complete.
 
-## Deployment
+## Known gaps and operator action
 
-Committed and pushed as `02a60a0ce579b74db8355f80a3c9fa0c1b336644` (`fix: repair mailroom release blockers`). Deployed `dist/site` to the existing `sf-reminder-mailroom` Static Web App on 2026-08-30. The deployment completed successfully as `0256519b-a25f-40ec-9a6b-8ff71cc1e30d`; the live HTTPS URL returned 200. `verify-url.sh` on the live URL found no console errors and passed title/lang/main/alt checks. Live evidence is in `.factory/evidence/repair-2-live/`.
-
-## Operator follow-up
-
-- Register/enable the existing `reminder-mailroom` one-time product in the Sociobot billing engine, then verify the hosted checkout response before release.
-- Provide Apple and Windows signing certificates if signed desktop packages are required. The release workflow deliberately ships unsigned builds until those credentials are supplied.
+- Enable/register the shared `reminder-mailroom` checkout route in the Sociobot billing engine, then verify the hosted return flow. This work order explicitly forbids changing that shared resource.
+- Provide Apple and Windows signing credentials if signed packages are required. The workflow intentionally publishes unsigned builds until certificates are supplied (`APPLE_CERTIFICATE`, `WINDOWS_CERT_PFX`, plus their passwords if the signing action is enabled).
+- `imap-proto 0.10.2` emits an upstream future-incompatibility warning. Current tests and builds pass.
