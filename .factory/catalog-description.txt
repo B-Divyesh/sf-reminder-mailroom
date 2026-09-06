@@ -1,0 +1,1 @@
+Archive one invoice from each payment-reminder thread.

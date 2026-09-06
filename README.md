@@ -65,7 +65,7 @@ On Ubuntu/Debian, install `libwebkit2gtk-4.1-dev`, `libappindicator3-dev`, `libr
 
 ## Purchase
 
-The free edition includes one rule, manual processing, and audit CSV export. Mailroom Plus costs US $29 once. It adds unlimited rules and checks while the app is open. New checkout remains operator-gated until the product route is enabled. Existing license verification uses the Sociobot billing API.
+The free edition includes one rule, manual processing, and audit CSV export. Mailroom Plus costs US $29 once. It adds unlimited rules and checks while the app is open. The site and app show the official purchase link only after the scoped Sociobot checkout accepts visitors. Existing license verification uses the Sociobot billing API.
 
 ## Repository map
 

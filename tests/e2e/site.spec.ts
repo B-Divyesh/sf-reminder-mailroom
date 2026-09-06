@@ -220,19 +220,29 @@ test("@claim:oauth-provider-setup exposes Google and Microsoft OAuth connection"
   expect(oauthCall?.args.settings).toMatchObject({ authMode: "oauth", oauthProvider: "google", oauthClientId: "fixture-desktop-client-id", imapHost: "imap.gmail.com", smtpHost: "smtp.gmail.com" });
 });
 
-test("@claim:paid-tier-copy states the price and honest checkout status", async ({ page }) => {
-  await page.goto("/");
+test("@claim:paid-tier-copy routes an available $29 Plus purchase to scoped checkout", async ({ page }) => {
+  const checkoutUrl = "https://api.sociobot.in/api/v1/products/reminder-mailroom/checkout";
+  await page.route(checkoutUrl, async (route) => {
+    if (route.request().isNavigationRequest()) {
+      await route.fulfill({ status: 204, body: "" });
+      return;
+    }
+    await route.fulfill({ status: 302, headers: { location: "https://checkout.example.test/hosted" } });
+  });
+  await page.goto("/?checkout-test=1");
   const paid = page.locator(".price-grid .paid");
   await expect(paid).toContainText("$29 one-time");
   await expect(paid).toContainText("Unlimited sorting rules");
-  await expect(paid.getByText("Checkout is being enabled")).toHaveAttribute("aria-disabled", "true");
-  await expect(page.locator('a[href*="/products/reminder-mailroom/checkout"]')).toHaveCount(0);
+  await expect(paid.getByRole("link", { name: "Buy Mailroom Plus" })).toHaveAttribute("href", checkoutUrl);
   await page.goto("http://127.0.0.1:4174");
   await page.getByRole("button", { name: "Plus", exact: true }).click();
   await expect(page.locator(".license-panel")).toContainText("$29 one-time");
   await expect(page.locator(".license-panel")).toContainText("Unlimited explicit sorting rules");
-  await expect(page.locator("#buy-link")).toHaveAttribute("aria-disabled", "true");
-  await expect(page.locator('a[href*="/products/reminder-mailroom/checkout"]')).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Buy Mailroom Plus (opens secure checkout)" })).toHaveAttribute("href", checkoutUrl);
+  await page.goto("/?checkout-test=1");
+  const checkoutNavigation = page.waitForRequest((request) => request.url() === checkoutUrl && request.isNavigationRequest());
+  await page.getByRole("link", { name: "Buy Mailroom Plus" }).click();
+  expect((await checkoutNavigation).method()).toBe("GET");
 });
 
 test("@claim:paid-license-lifecycle verifies a license, enables paid controls, and locks them after revocation", async ({ page }) => {
@@ -285,10 +295,15 @@ test("@claim:website-request-privacy sends no tracking or visitor data", async (
     contentType: "application/json",
     body: JSON.stringify({ tag_name: "v0.3.0", assets: [] }),
   }));
-  await page.goto("/?release-test=1");
-  await page.locator("#privacy").scrollIntoViewIfNeeded();
+  await page.route("https://api.sociobot.in/api/v1/products/reminder-mailroom/checkout", (route) => route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ error: "enabled factory product", status: 404 }) }));
+  await page.goto("/?release-test=1&checkout-test=1");
+  await page.locator("#price").scrollIntoViewIfNeeded();
+  await expect(page.locator("#checkout-status")).toHaveText("Checkout is being enabled");
   const external = requests.map((request) => new URL(request)).filter((url) => url.origin !== "http://127.0.0.1:4173");
-  expect(external.map((url) => `${url.origin}${url.pathname}`)).toEqual(["https://api.github.com/repos/B-Divyesh/sf-reminder-mailroom/releases/latest"]);
+  expect(external.map((url) => `${url.origin}${url.pathname}`)).toEqual([
+    "https://api.github.com/repos/B-Divyesh/sf-reminder-mailroom/releases/latest",
+    "https://api.sociobot.in/api/v1/products/reminder-mailroom/checkout",
+  ]);
   expect(requests.some((request) => /analytics|doubleclick|segment|pixel/i.test(request))).toBe(false);
 });
 
