@@ -1,35 +1,27 @@
-# Reminder Mailroom repair 4 handoff
+# Reminder Mailroom repair 5 handoff
 
 ## Outcome
 
-All product-owned findings in verifier report commit `7f67e2d493d86bb67057ec9b63fab455a9774cd2` for candidate `805eb72ac52906c4191dc5707d03cc5a902a4951` are repaired. The Tauri 2 desktop artifact and static-site deployment classes are unchanged.
+Implementation commit: `dbc990f92e1aa1e14db6746d17b59f3cda853a7f`.
 
-The repair was committed as `40d0421` and pushed to `origin/main`. `dist/site` was deployed to the existing `sf-reminder-mailroom` Static Web App. No shared app, database, key vault, DNS, billing configuration, or unrelated resource was read or changed.
+The product-owned repair is deployed to `https://reminder-mailroom.sociobot.in/`. It removes the attempted background fetch of the unavailable checkout endpoint. That fetch turned the operator-owned HTTP 404 into a browser console error when visitors reached pricing. The landing page and desktop app now show the exact $29 one-time Mailroom Plus offer, existing license restore, and a non-navigating **Checkout is being enabled** state. The state is consistent with the live billing service and does not send a visitor to a known error page.
 
-The controller explicitly excluded the operator-gated checkout 404. The landing site and desktop app still show **Checkout is being enabled** as a disabled status, contain no checkout URL, and keep existing license restore available.
+The paid edition has not been removed or made free. The free edition remains useful with one rule, manual processing, and audit CSV export. Plus remains defined as unlimited explicit rules and automatic checks while the app is open.
 
-## Reproduction before repair
+The actual purchase failure cannot be repaired inside this repository: `https://api.sociobot.in/api/v1/products/reminder-mailroom/checkout` still returns HTTP 404 for the public product. Billing registration is owned by the separate controller operator, and this work did not read or change billing configuration. Required public offer metadata was written to `/work/.evidence/billing-offer.json`; it contains no credential. The plain catalog description is in `.factory/catalog-description.txt` and was copied to `/work/.evidence/catalog-description.txt`.
 
-The exact failures were reproduced before product code changed:
+## Repair and regression coverage
 
-- A route-metadata regression expected description, canonical, Open Graph, and Twitter fields. `/demo/`, `/privacy/`, and `/terms/` returned no Open Graph or Twitter fields. The 404 also lacked description and canonical metadata.
-- A walkthrough regression measured readable dark-pixel coverage in the app-content crop. The old setup capture measured `0.023291`, below the `0.03` floor; the rules and activity frames were visibly captured during the 180 ms opacity transition.
-- `npm run lint` invoked Clippy with `-D warnings` and failed on the two reported `needless_borrow` diagnostics at `src-tauri/src/desktop.rs:794`.
-
-## Repairs and regression coverage
-
-- Added route-specific canonical, Open Graph, and Twitter metadata to demo, Privacy, Terms, and the designed 404. All use the existing original 1200 × 630 product social card.
-- Replaced all three walkthroughs with real 1280 × 800 app captures. Rules and activity now show the bundled Northstar sample instead of an empty or transparent transition frame.
-- Added `npm run capture:walkthroughs`. The deterministic Playwright capture waits for opacity, transform, and active animations to settle before writing each frame.
-- Added Playwright coverage for the complete metadata matrix on all four non-landing pages and for dimensions plus readable content coverage in every walkthrough asset.
-- Removed the redundant Rust borrows. `npm run lint` now includes `cargo clippy --all-targets --all-features -- -D warnings`, so the warning cannot return unnoticed.
-- Recorded the capture method and provenance in `.factory/design.md` and the developer commands in `README.md`.
-
-Live walkthrough crop ratios are `0.041033` (setup), `0.043789` (rules), and `0.053511` (activity), all above the regression floor.
+- Removed checkout-availability probing and its checkout URL dependency from the static landing page and Tauri app. The page no longer makes a billing request merely because a visitor scrolls to pricing.
+- Kept existing license validation and restore intact. The billing API is contacted only after a person explicitly restores a license.
+- Made the desktop pricing heading and unavailable message direct and plain.
+- Restored privacy and README wording to describe the actual request boundary and current operator-gated purchase state.
+- Replaced the old “available checkout” test with an outcome test. It proves the exact price and Plus features appear, the disabled control cannot navigate, and the browser makes zero checkout requests. The website privacy test now proves that the normal landing flow contacts only the documented GitHub release API externally.
+- Added `.env` to `.gitignore`; the deployment CLI's temporary local credential file was removed without being read.
 
 ## Clean local verification
 
-The following ran after a clean `npm ci`:
+From a clean `npm ci` install (167 packages, 0 reported vulnerabilities), the following all passed after documented native prerequisites were installed:
 
 ```sh
 npm test
@@ -43,54 +35,32 @@ cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 npm run build
 ```
 
-Results:
+- Vitest: 7 passed. Reduced Rust core: 3 passed. Full native Rust: 15 passed. Playwright: 21 passed.
+- Every one of the 23 commands declared by `.factory/claims.json` passed individually. Each `@claim:` tag occurs exactly once.
+- POSIX and PowerShell installer consumer fixtures passed, including checksum verification.
+- TypeScript, ESLint, strict Clippy, and Rust formatting passed. Cargo still prints the upstream `imap-proto 0.10.2` future-incompatibility notice; it is not a Reminder Mailroom lint warning.
+- The production build produces `dist/app` and `dist/site`. The landing JavaScript is 3.85 KB raw / 1.72 KB gzip; the largest CSS file is 17.22 KB raw / 4.44 KB gzip.
+- `/opt/fleet/lib/verify-url.sh` passed `/`, `/demo/`, `/privacy/`, and `/terms/` against the production build: one h1, `lang=en`, a main landmark, complete image alt text, labelled buttons, and no console errors.
+- Playwright Axe scanned landing, demo, Privacy, Terms, and the designed 404 at desktop and 390 px in light/dark combinations. It found 0 serious or critical issues. This is the allowed Playwright Axe integration; the standalone Axe CLI could not launch because the worker has no system Chrome binary.
 
-- Clean install: 167 packages, 0 vulnerabilities.
-- Vitest: 7 passed; reduced Rust core: 3 passed; full native Rust: 15 passed.
-- Playwright: 21 passed at desktop and 390 px, including keyboard, focus, dialog, 200% text, light/dark, privacy, offline reload, and service-worker update checks.
-- Claims: all 23 commands passed independently; all 23 `@claim:` tags occur exactly once.
-- POSIX and PowerShell installer consumer fixtures passed.
-- TypeScript, ESLint, strict Clippy, Rust formatting, and `git diff --check` passed. Clippy reports no product warnings.
-- Production build created `dist/app` and `dist/site`. Initial site JavaScript is at most 3.85 KB raw / 1.72 KB gzip; CSS is at most 17.22 KB raw / 4.44 KB gzip. Loaded font files remain 92.08 KB, and the mobile hero is 14.89 KB.
-- `verify-url.sh` passed landing, demo, Privacy, Terms, and 404 locally: HTTP 200 for direct artifacts, one `h1`, `lang=en`, a main landmark, complete alt text, labeled buttons, and no console errors.
-- Standalone axe-core 4.10.3 found 0 violations on all five local pages.
-- Local mobile Lighthouse: Performance 99, Accessibility 100, Best Practices 100, SEO 100; FCP/LCP 1.7 s, total blocking time 0 ms, CLS 0.
-- The SWA 2.0.10 emulator confirmed the `/demo` redirect, designed 404 rewrite, 30-second HTML/service-worker revalidation, one-year immutable asset caching, and the configured CSP, permissions, referrer, MIME, and frame policies.
-
-Local browser evidence is under `.factory/evidence/repair-4/local/`.
+Local evidence is under `.factory/evidence/repair-5/local/`.
 
 ## Deployment and live verification
 
-SWA CLI 2.0.10 deployed `dist/site` to production using only the exact `sf-reminder-mailroom` resource. The generated endpoint was `https://gray-cliff-0e617dd10.7.azurestaticapps.net`; the public identity remains <https://reminder-mailroom.sociobot.in/>.
+`dist/site` was deployed through the existing durable Static Web Apps configuration to the product-owned `sf-reminder-mailroom` application. The deployment endpoint was `https://gray-cliff-0e617dd10.7.azurestaticapps.net`; the public product origin remains `https://reminder-mailroom.sociobot.in/`. SQLite/process-local settings and product scope were not changed.
 
-- `/`, `/demo/`, `/privacy/`, and `/terms/` return 200. An unknown route returns the designed page with HTTP 404. `robots.txt`, `sitemap.xml`, `sw.js`, and both installer scripts return 200.
-- Live landing, demo, Privacy, and Terms HTML hashes match `dist/site` byte-for-byte. The live 404 hash is `7c4eeef265d18454a22a572db99cdf56b55a5c62055812281a7dc51ed55f6182`, also identical to the build.
-- Live walkthrough hashes match the build: setup `a25ffe8fa84dab6f8cbd390535a83bc8fe8f554bd5885158446d3bb668a7759e`, rules `927c31a892e0ce1008ac195c0acd44d0eda7f41f58b177b08aec94f63e756957`, activity `0b350c796c355f24a5fc2f141be66ebe79aba55da86df305dbbdea55fbdb87ff`.
-- Route-specific metadata passed on demo, Privacy, Terms, and a real 404 response. The landing and all normal routes had 0 console errors; the unavailable checkout remained a disabled status with zero checkout links.
-- `verify-url.sh` passed all four live 200 routes. Standalone axe-core found 0 violations across landing, demo, Privacy, Terms, and the live 404.
-- A fresh live demo archived one invoice, skipped two reminders, made same-origin requests only, and reloaded successfully offline.
-- Live responses include CSP, HSTS, Permissions-Policy, Referrer-Policy, `nosniff`, and frame denial. HTML and `sw.js` revalidate after 30 seconds; walkthrough assets use one-year immutable caching.
-- Live mobile Lighthouse: 100 Performance, 100 Accessibility, 100 Best Practices, 100 SEO; FCP/LCP 1.4 s, total blocking time 0 ms, CLS 0, 120 KiB transfer.
-- All crawled live internal and GitHub download links returned 200 or the expected GitHub 302 download response.
+- The live landing contains `main-Bc64ZVx8.js`, the final implementation bundle. All 28 publicly served build files match the live files by SHA-256.
+- `/`, `/demo/`, `/privacy/`, and `/terms/` return 200 with route-specific titles. An unknown URL returns the designed **Page not found** screen with the expected HTTP 404 and a home link.
+- Fresh desktop and 390 px browser contexts reported the first-screen job as “Archive one invoice from every reminder thread”; the audience is solo businesses that send payment reminders; the first action is “Try it with sample data.” Neither viewport had horizontal overflow.
+- In both fresh contexts, the one-click demo showed the persistent sample banner, sorted the realistic sample to 1 archived invoice, 2 duplicates skipped, and 1 forwarded message, then Reset demo removed only `demo:reminder-mailroom`, preserved a separate real-data sentinel, and returned focus to **Run sample sort**.
+- Fresh desktop and phone flows had zero console errors. Their only external normal-flow request was the documented GitHub release metadata request; neither made a checkout request. The price control had no `href` and remained `aria-disabled=true`.
+- Live `verify-url.sh` checks passed on landing, demo, Privacy, and Terms. Live Playwright Axe found 0 serious/critical issues across those routes and the 404 on desktop and phone.
+- Live responses retain the expected CSP, `nosniff`, and strict referrer policy. HTML uses 30-second revalidation and hashed assets use one-year immutable caching.
 
-Live browser evidence is under `.factory/evidence/repair-4/live/`.
+Live evidence is under `.factory/evidence/repair-5/live/`.
 
-## Release package verification
+## Remaining blocker and next action
 
-The desktop behavior and package inputs did not change; the Rust edit removes redundant references only. The existing v0.3.0 release remains the current package release and contains AppImage, DEB, RPM, MSI, EXE, Intel and Apple silicon DMGs, `SHA256SUMS`, and `latest.json`.
+This is not a successful paid-product release: a new customer still cannot purchase Mailroom Plus. The public checkout route is an operator-owned dependency and returns 404. The controller must register and enable the exact `reminder-mailroom` one-time US $29 offer and return URL recorded in `/work/.evidence/billing-offer.json`. After it is live, a follow-up must add the plain hosted checkout link and verify the real redirect, returned license storage, and entitlement verification on the HTTPS product.
 
-The downloaded Debian consumer artifact reports package `reminder-mailroom`, version `0.3.0`, architecture `amd64`. Its SHA-256 is `a9be293c5e571ec1d76163b7121b8d8c66dad4ad4b2e1d4461851c3a0715cc46`, matching the published checksum.
-
-## Known external gaps
-
-- New checkout remains operator-gated. Per controller direction, this repair did not query or modify the checkout service and did not add a dead purchase action.
-- macOS and Windows packages remain unsigned until the operator supplies signing credentials.
-- `imap-proto 0.10.2` still emits Cargo's upstream future-incompatibility notice. Strict Clippy passes with no Reminder Mailroom warning.
-
-## Independent verification 5 — FAIL
-
-Candidate `2b54d12e7aac5dea8b2c2dab7e6049740bc10e32` was checked from a detached clean worktree and against <https://reminder-mailroom.sociobot.in/> on 1 September 2026.
-
-The claim inventory is present and all 23 declared claim checks pass. Clean `npm test`, full native tests, Playwright tests, installer checks, type check, strict lint, Rust formatting, and the production build pass. The live static deployment matches all 28 files in the candidate build. The demo, offline reload, desktop package smoke check, privacy request boundary, response headers, caching, mobile keyboard path, and axe serious/critical checks pass. The observed invalid-license allowance is 30 requests in the active short window; request 31 returns 429 with `Retry-After`.
-
-**Release result: FAIL.** The researched brief requires a one-time paid edition, but the live page has no purchase link and `https://api.sociobot.in/api/v1/products/reminder-mailroom/checkout` returns HTTP 404. Enable the scoped checkout route, add the hosted purchase link, and check its returned-license flow before release. See `.factory/verification-5.md` for exact evidence.
+MacOS and Windows artifacts also remain unsigned until the operator provides signing material. No secrets were read, stored, committed, or reported during this repair.
