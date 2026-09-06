@@ -50,10 +50,10 @@
   },
   {
     "id": "paid-tier-copy",
-    "claim": "When the scoped checkout is available, Mailroom Plus is listed at $29 once and opens the official purchase route.",
+    "claim": "Mailroom Plus is listed at $29 once, and the unavailable checkout is shown honestly without a dead purchase link.",
     "where": "landing pricing, desktop Plus view, terms, README",
     "test": "npm run test:e2e -- --grep @claim:paid-tier-copy",
-    "sandbox": "fresh browser context; recorded available checkout response; assert the price, paid features, enabled purchase link, and navigation to the scoped checkout route"
+    "sandbox": "fresh browser context; assert exact price, included feature, operator-gated checkout state, and that the disabled control cannot navigate to the known unavailable route"
   },
   {
     "id": "paid-license-lifecycle",

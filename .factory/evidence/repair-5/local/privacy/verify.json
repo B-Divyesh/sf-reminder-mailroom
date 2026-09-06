@@ -1,6 +1,6 @@
 {
   "url": "http://127.0.0.1:4280/privacy/",
-  "loadMs": 588,
+  "loadMs": 601,
   "errors": [],
   "a11y": {
     "title": "Privacy — Reminder Mailroom",
@@ -9,6 +9,6 @@
     "main": true,
     "imgsMissingAlt": 0,
     "buttonsUnlabeled": 0,
-    "textLength": 1544
+    "textLength": 1461
   }
 }

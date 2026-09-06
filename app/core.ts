@@ -1,6 +1,5 @@
 export const PRODUCT_SLUG = "reminder-mailroom";
 export const BILLING_BASE = "https://api.sociobot.in/api/v1";
-export const CHECKOUT_URL = `${BILLING_BASE}/products/${PRODUCT_SLUG}/checkout`;
 export const LICENSE_KEY = `sb_license:${PRODUCT_SLUG}`;
 export const LICENSE_CACHE_KEY = `${LICENSE_KEY}:verdict`;
 export const DAY_MS = 86_400_000;
@@ -10,16 +9,6 @@ export type LicenseVerdict = {
   reason: "ok" | "invalid" | "expired" | "revoked" | "wrong_product" | "offline";
   checkedAt: number;
 };
-
-/**
- * Checkout intentionally redirects to the hosted merchant page. In a browser
- * manual redirects are opaque, while an unregistered product is a readable
- * 404. Treat only a real client error as unavailable so the purchase link can
- * appear without redeploying when the billing operator enables this product.
- */
-export function checkoutIsAvailable(response: Pick<Response, "status" | "type">): boolean {
-  return response.type === "opaqueredirect" || (response.status >= 200 && response.status < 400);
-}
 
 export function normalizeSubject(subject: string): string {
   return subject

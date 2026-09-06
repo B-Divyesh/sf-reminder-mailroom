@@ -1,5 +1,5 @@
 import "./styles.css";
-import { BILLING_BASE, CHECKOUT_URL, LICENSE_CACHE_KEY, LICENSE_KEY, PRODUCT_SLUG, checkoutIsAvailable, consumeLicenseFromUrl } from "../app/core";
+import { BILLING_BASE, LICENSE_CACHE_KEY, LICENSE_KEY, PRODUCT_SLUG, consumeLicenseFromUrl } from "../app/core";
 
 type ReleaseAsset = { name: string; browser_download_url: string };
 type Release = { tag_name: string; assets: ReleaseAsset[] };
@@ -79,38 +79,6 @@ async function verify(token: string) {
   } catch { status.textContent = "The license service could not be reached. Downloads and free features still work."; }
 }
 
-function replaceCheckoutAction(available: boolean) {
-  const current = document.querySelector<HTMLElement>("#checkout-status");
-  if (!current) return;
-  if (available) {
-    current.outerHTML = `<a class="button" id="checkout-status" href="${CHECKOUT_URL}">Buy Mailroom Plus</a>`;
-    return;
-  }
-  current.outerHTML = '<span class="button unavailable" id="checkout-status" aria-disabled="true">Checkout is being enabled</span>';
-}
-
-async function loadCheckoutAvailability() {
-  try {
-    const response = await fetch(CHECKOUT_URL, { credentials: "omit", redirect: "manual" });
-    replaceCheckoutAction(checkoutIsAvailable(response));
-  } catch {
-    replaceCheckoutAction(false);
-  }
-}
-
-function observeCheckoutAvailability() {
-  const price = document.querySelector("#price");
-  if (!price) return;
-  const params = new URL(location.href).searchParams;
-  if (params.has("checkout-test")) { void loadCheckoutAvailability(); return; }
-  const observer = new IntersectionObserver((entries) => {
-    if (!entries.some((entry) => entry.isIntersecting)) return;
-    observer.disconnect();
-    void loadCheckoutAvailability();
-  }, { rootMargin: "160px" });
-  observer.observe(price);
-}
-
 document.querySelectorAll<HTMLButtonElement>("[data-copy]").forEach((button) => button.addEventListener("click", async () => {
   await navigator.clipboard.writeText(button.dataset.copy!);
   const old = button.textContent;
@@ -129,5 +97,4 @@ const incoming = consumeLicenseFromUrl(url, localStorage);
 if (incoming) { history.replaceState({}, "", url); document.querySelector<HTMLInputElement>("#site-license")!.value = incoming; void verify(incoming); }
 if (location.hostname === "reminder-mailroom.sociobot.in" || url.searchParams.has("release-test")) void loadDownloads();
 else document.querySelector<HTMLElement>("#release-note")!.textContent = "Preview build · release assets are linked on GitHub";
-observeCheckoutAvailability();
 if ("serviceWorker" in navigator) window.addEventListener("load", () => void navigator.serviceWorker.register("/sw.js"));

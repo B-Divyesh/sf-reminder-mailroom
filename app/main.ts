@@ -1,6 +1,6 @@
 import "./styles.css";
 import { invoke } from "@tauri-apps/api/core";
-import { BILLING_BASE, CHECKOUT_URL, LICENSE_CACHE_KEY, LICENSE_KEY, PRODUCT_SLUG, cachedLicense, checkoutIsAvailable, consumeLicenseFromUrl } from "./core";
+import { BILLING_BASE, LICENSE_CACHE_KEY, LICENSE_KEY, PRODUCT_SLUG, cachedLicense, consumeLicenseFromUrl } from "./core";
 
 type Settings = {
   authMode: string; oauthProvider: string; oauthClientId: string;
@@ -20,7 +20,6 @@ let paid = false;
 let activeView = "setup";
 let lastFocused: HTMLElement | null = null;
 let scanTimer = 0;
-let checkoutProbeStarted = false;
 
 const icons = {
   setup: '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M7 4v6M4 17h16m-5-3v6"/></svg>',
@@ -103,7 +102,7 @@ function activityView() {
 }
 
 function licenseView() {
-  return `<section class="view" data-section="license" aria-labelledby="license-heading"><h2 id="license-heading">Buy Mailroom Plus once</h2><p class="section-intro">One rule, manual previews, archiving, and audit export are free. Plus is for busy mailrooms that need more rules and automatic checks while the app is open.</p><div class="license-panel"><span class="badge" id="license-badge">Free</span><p class="price">$29 <small>one-time</small></p><ul class="feature-list"><li>Unlimited explicit sorting rules</li><li>Automatic checks every 15–240 minutes while open</li><li>Same local processing and full data export</li></ul><span class="button unavailable" id="buy-link" aria-disabled="true">Checkout is being enabled</span><p class="checkout-note">Free downloads work now. A purchase link appears here when secure checkout is ready.</p><div class="license-restore"><div class="field"><label for="license-token">Have a license? Paste it here</label><input id="license-token" autocomplete="off" spellcheck="false"><span class="hint">The token is stored only on this device.</span></div><div class="actions"><button class="button secondary" id="restore-license">Verify license</button></div><p class="status-message" id="license-status" role="status"></p></div><p class="legal-note">Sociobot/Dodo handles existing licenses and refunds. A revoked license turns off paid features. <a href="https://reminder-mailroom.sociobot.in/privacy" target="_blank">Privacy</a> · <a href="https://reminder-mailroom.sociobot.in/terms" target="_blank">Terms</a></p></div></section>`;
+  return `<section class="view" data-section="license" aria-labelledby="license-heading"><h2 id="license-heading">Mailroom Plus pricing</h2><p class="section-intro">One rule, manual previews, archiving, and audit export are free. Plus is for busy mailrooms that need more rules and automatic checks while the app is open.</p><div class="license-panel"><span class="badge" id="license-badge">Free</span><p class="price">$29 <small>one-time</small></p><ul class="feature-list"><li>Unlimited explicit sorting rules</li><li>Automatic checks every 15–240 minutes while open</li><li>Same local processing and full data export</li></ul><span class="button unavailable" id="buy-link" aria-disabled="true">Checkout is being enabled</span><p class="checkout-note">Free downloads work now. New purchases resume after the product checkout is published.</p><div class="license-restore"><div class="field"><label for="license-token">Have a license? Paste it here</label><input id="license-token" autocomplete="off" spellcheck="false"><span class="hint">The token is stored only on this device.</span></div><div class="actions"><button class="button secondary" id="restore-license">Verify license</button></div><p class="status-message" id="license-status" role="status"></p></div><p class="legal-note">Sociobot/Dodo handles existing licenses and refunds. A revoked license turns off paid features. <a href="https://reminder-mailroom.sociobot.in/privacy" target="_blank">Privacy</a> · <a href="https://reminder-mailroom.sociobot.in/terms" target="_blank">Terms</a></p></div></section>`;
 }
 
 function field(id: string, label: string, placeholder: string, type: string, required: boolean, hint = "") {
@@ -213,7 +212,6 @@ function switchView(view: string) {
   const content: Record<string, [string,string]> = { setup: ["01 · Connect", "Connect the mailbox that sends invoices and the accounting address that should receive exactly one canonical copy."], rules: ["02 · Decide", "Describe only the invoice mail you expect. Every route stays visible and can be paused or removed."], activity: ["03 · Verify", "See the original saved, every duplicate stopped, and the reason for each decision."], license: ["Optional · Plus", "The free workflow stays useful. Upgrade once for more rules and automatic checks while Mailroom is open."] };
   $("#view-eyebrow").textContent = content[view][0]; $("#view-lede").textContent = content[view][1];
   $("#main").focus({ preventScroll: true });
-  if (view === "license") void loadCheckoutAvailability();
 }
 
 async function runScan(dryRun: boolean) {
@@ -246,27 +244,6 @@ function applyLicense(valid: boolean, reason: string) {
   else if (valid) setStatus("#license-status", "Mailroom Plus is active on this device.", false, true);
   else if (reason !== "none") setStatus("#license-status", "This license is no longer active. You can paste another token or buy a new license.", true);
   configureSchedule();
-}
-
-function replaceCheckoutAction(available: boolean) {
-  const current = document.querySelector<HTMLElement>("#buy-link");
-  if (!current) return;
-  if (available) {
-    current.outerHTML = `<a class="button" id="buy-link" href="${CHECKOUT_URL}" target="_blank" rel="noreferrer">Buy Mailroom Plus (opens secure checkout)</a>`;
-    return;
-  }
-  current.outerHTML = '<span class="button unavailable" id="buy-link" aria-disabled="true">Checkout is being enabled</span>';
-}
-
-async function loadCheckoutAvailability() {
-  if (paid || checkoutProbeStarted) return;
-  checkoutProbeStarted = true;
-  try {
-    const response = await fetch(CHECKOUT_URL, { credentials: "omit", redirect: "manual" });
-    replaceCheckoutAction(checkoutIsAvailable(response));
-  } catch {
-    replaceCheckoutAction(false);
-  }
 }
 
 function configureSchedule() {
